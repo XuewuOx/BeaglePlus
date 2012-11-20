@@ -34,8 +34,8 @@ static const char *PORTPC_NAME = "/dev/ttyO2";  // for default RS232 console at 
 uartBeagle mBed("mBed");
 uartBeagle PC("PC");
 
-#define MAXROW_DATA 100
-#define MAXCOL_DATA 1000
+#define MAXROW_DATA 20
+#define MAXCOL_DATA 10
 
 int dataUV[MAXROW_DATA][MAXCOL_DATA];
 int dataIR[MAXROW_DATA][MAXCOL_DATA];
@@ -78,6 +78,7 @@ int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL
 int main(int argc, char* argv[]) {
 
 	int i;
+	unsigned int nDAQ;
     double elapsed_secs;
     char *pNamemBed;
     int nChars;
@@ -118,13 +119,16 @@ int main(int argc, char* argv[]) {
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
 
-	mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-	usleep(100);
+	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
+	usleep(1000);
+	while (mBed.readline()==0){}
 	// mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
 	statemain=IDLE; // 1
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
+	t1-=60;
+	nDAQ=0;
 	while (1)
 	{
 		// tNow=clock();
@@ -132,19 +136,19 @@ int main(int argc, char* argv[]) {
 		time(&t2);
 		elapsed_secs=difftime(t2,t1);
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
-		if (elapsed_secs>=10)
+		if (elapsed_secs>=30)
 		{
-
+			nDAQ++;
 			struct tm * timeinfo= localtime(&t2);
 			printf("[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 				    		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-			printf("start UV/IR measurement\n");
+			printf("start %d-th UV/IR measurement\n",nDAQ);
 			t1=t2;
 
 			statemain=MOVEMOTOR; //2
 			// moveMotor2Switch();
 			// move motor for reference measurement
-			moveMotor2Dest(800);
+			moveMotor2Dest(80);
 			statemain=SWN; //3
 			mBed.uartwriteStr("uvs00\r\n");
 			// fgets(tempbuff, 100, uart_mBed);
@@ -159,14 +163,15 @@ int main(int argc, char* argv[]) {
 			usleep(100);
 			mBed.uartread();
 
-		/*	int posA, posB, nSam;
-			posA=791; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
-			if (daqBySWN(790, MAXROW_DATA, nSam, dataIR, dataUV)==-1)
+		    int posA, posB, nSam;
+			posA=91; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
+			if (daqBySWN(posA, MAXROW_DATA, nSam, dataIR, dataUV)==-1)
 			{ // something wrong
-			  continue; // ignore the data and continue the main loop
+				cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
+				continue; // ignore the data and continue the main loop
 			}
-		*/
-			printf("Press any key to resume\r\n");
+
+			printf("SWN done! Press any key to resume\r\n");
 			getchar();
 /*
 			// Data processing
@@ -257,39 +262,27 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	cout<<"send '"<<dataStr<<"' down to mBed"<<endl;
 	size_t found0, found2;
 
-	mBed.readPkt("M posA","DATAIRUVEND",strRx);
-	/* while(1)
-	{
-		mBed.readline();
-		// cout<<"mBed.rxbuf length="<<strRx.length()<<"nTotoalChar="<<nTotalChar;
-		// cout<<"lineReceived="<<mBed.lineReceived<<endl;
-		strRx.append(mBed.rxbuf);
-		// mBed.rxbufptr=mBed.rxbuf;
-		found0=strRx.find("m posA");
-		found2=strRx.find("DATAIRUVEND");
-		if (found0!=string::npos && found2!=string::npos)
-		{	cout <<"first 'mposA=' found at: "<<int(found0)<<endl;
-			cout <<"first 'DATAIRUVEND' found at: "<<int(found2)<<endl;
-			strRx.erase(found2+strlen("DATAIRUVEND"));
-			strRx.erase(0,found0-1);
-			strRx.copy(dataStr, 0, strRx.length());
-			dataStr[strRx.length()]='\0';
-			break;
-		}
-		usleep(1000);
-	}
-*/
-	printf("\r\n%d lines, %d nTotalShars",mBed.lineReceived,mBed.nTotalChar);
-	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
+	mBed.readPkt("M posA=","DATAIRUVEND",strRx);
+	/*
 	cout<<"========================================"<<endl;
+	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
 	cout<<strRx<<endl;
 	cout<<"========================================"<<endl;
 
 	printf("\r\n----------------------------------------\r\n");
 	printf("printf full data packet found: %s",dataStr);
-	int posA, nSteps, nSam, nArg;
-	nArg=sscanf(dataStr,"M posA=%d, nSteps=%d nSam=%d",&posA,&nSteps, &nSam);
-	if(nArg!=3 || posA!=a || nSteps!=nDataSteps_a2b || nSam!=nSperS)
+	*/
+	int posA, nSteps, nSam, nFs, nArg;
+	// char charLE="\r\n";
+	string firstLine;
+	size_t posLE;
+	firstLine=strRx.substr(1,(int)(strRx.find("\r\n")));
+	strRx.erase(0,(int)(strRx.find("\r\n"))+1);
+	// cout<< "first line: "<<firstLine<<endl;
+	printf("desired values: posA=%d, nSteps=%d, nSam=%d\r\n",a,nDataSteps_a2b,nSperS);
+	nArg=sscanf(firstLine.c_str(),"M posA=%d, nSteps=%d, nSam=%d, Fs=%d",&posA,&nSteps, &nSam, &nFs);
+	printf("decaped values: posA=%d, nSteps=%d, nSam=%d\r\n",posA,nSteps,nSam);
+	if(nArg!=4 || posA!=a || nSteps!=nDataSteps_a2b || nSam!=nSperS )
 		{ printf("ERROR: wrong M posA=%d, nSteps=%d  nSam=%d from mBed\r\n", posA, nSteps, nSam);
 		  return -1; // return an ERROR
 		  // continue; // continue the main loop
@@ -297,41 +290,64 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 
 	// convert ASCII packet into int array
 	char leadStrIR[10], leadStrUV[10];
-	char * pEnd;
+	char *pStart, *pEnd;
+	size_t pNextLine;
+	int nDataChar;
+
 	for (i=0;i<nSteps;i++)
-	{   sprintf(leadStrIR,"dir%02d=[",i);
-		leadStrIR[7]='\0';
+		for (j=0; j<nSam; j++)
+			{ dataIR[i][j]=0xFFFF; dataUV[i][j]=0xFFFF;}
+
+	for (i=0;i<nSteps;i++)
+	{   sprintf(leadStrIR,"dir%03d=[ \0",i); //'\0' to terminate the string
 		found0=strRx.find(leadStrIR);
+		found2=strRx.find("\r\n");
+		nDataChar=found2-(found0+strlen(leadStrIR))-1;
+	    int lencpy=strRx.copy(dataStr,nDataChar,found0+strlen(leadStrIR));
+	    dataStr[lencpy]='\0'; // terminate the string
+		strRx.erase(0,found2+1); // remove one line
+		// cout<< "dataStr contains: "<<dataStr<<" OK "<<endl;
+	    //  printf("%d-th line IR: %s\r\n", i, dataStr);
+	    // printf("dataIR[%d][]=",i);
+	    pEnd=dataStr;
+	    for (int j=0;j<nSam;j++)
+		 	{ dataIR[i][j]=strtol(pEnd, &pEnd,10);
+		 	  // printf(" %d",dataIR[i][j]);
+		 	}
+	    // printf("\r\n");
 
-		sprintf(leadStrUV,"duv%02d=[",i);
-		leadStrUV[7]='\0';
-		found2=strRx.find(leadStrIR);
-        pEnd=dataStr+(int)found0+7;
+
+	    sprintf(leadStrUV,"duv%03d=[ \0",i);
+		found0=strRx.find(leadStrUV);
+		found2=strRx.find("\r\n");
+		nDataChar=found2-(found0+strlen(leadStrIR))-1;
+		// cout<<"found0="<<found0<<", found2="<< found2<<" nDataChar="<<nDataChar<<endl;
+		// TODO: check if nDataChar == nSam*(4+1)+2
+		// nDataChar=nSam*(4+1)+2; // how many chars in one data line
+		strRx.copy(dataStr,nDataChar,(int)found0+strlen(leadStrUV));
+	    dataStr[nDataChar]='\0'; // terminate the string
+		strRx.erase(0,found2+1); // remove one line
+		// printf("dataUV[%d][]=",i);
+	    pEnd=dataStr;
 		for (int j=0;j<nSam;j++)
-		{ 	dataIR[i][j]=strtol(dataStr+(int)found0+7+j*5, &pEnd,10);
-		    // dataIR[i][j]=strtol(pEnd, &pEnd,10);
-			// sscanf(dataStr+(int)found0+7+i*5," %d",dataIR+i+j)
-			dataUV[i][j]=strtol(dataStr+(int)found2+7+j*5, &pEnd,10);
-		}
+			dataUV[i][j]=strtol(pEnd, &pEnd,10);
 
-	}
+	 }
 	// printf the dataIR and dataUV int array
 	printf("dataIR and dataUV are:\r\n");
 	for (int i=0;i<nSteps;i++)
 		{  int j;
-		   printf("IR02%d=[",i);
+		   printf("IR03%d=[",i);
 		   for (j=0; j<nSam;j++)
 			   printf(" %04d",dataIR[i][j]);
 		   printf("]\r\n");
 
-		   printf("UV02%d=[",i);
+		   printf("UV03%d=[",i);
 		   for (j=0; j<nSam;j++)
-		  	   printf(" %04d",dataIR[i][j]);
+		  	   printf(" %04d",dataUV[i][j]);
 		   printf("]\r\n");
 		}
-
 	return 0;
-
 }
 
 // Test Matlab Code Generation

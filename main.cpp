@@ -125,11 +125,6 @@ int main(int argc, char* argv[]) {
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
-	time(&t2);
-	struct tm * timeinfo= localtime(&t2);
-		printf("[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-			    		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-
 	while (1)
 	{
 		// tNow=clock();
@@ -137,7 +132,7 @@ int main(int argc, char* argv[]) {
 		time(&t2);
 		elapsed_secs=difftime(t2,t1);
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
-		if (elapsed_secs>=30)
+		if (elapsed_secs>=10)
 		{
 
 			struct tm * timeinfo= localtime(&t2);
@@ -151,7 +146,6 @@ int main(int argc, char* argv[]) {
 			// move motor for reference measurement
 			moveMotor2Dest(800);
 			statemain=SWN; //3
-			usleep(100);
 			mBed.uartwriteStr("uvs00\r\n");
 			// fgets(tempbuff, 100, uart_mBed);
 			usleep(100);
@@ -161,7 +155,7 @@ int main(int argc, char* argv[]) {
 			int nChn, Fs, nSample;
 			nChn=0; Fs=1000; nSample=1;
 			sprintf(tempStr,"a2d %d %d %d\r\n",nChn, Fs, nSample);
-			mBed.uartwriteStr(tempStr);
+			// mBed.uartwriteStr(tempStr);
 			usleep(100);
 			mBed.uartread();
 
@@ -426,20 +420,20 @@ void process_UART()
 // return: motor's position after complete the move command
 int moveMotor2Dest(int dest)
 {
-	int nChars;
+	int nLines, nPars;
 	char cmdMove[20];
 	sprintf(cmdMove, "move -d 1 %d\r\n",dest);
 	// motorLED.uSW=0;
 	mBed.uartwriteStr(cmdMove);
 	do{
-			nChars=mBed.readline();
-	}while(nChars==0);
+			nLines=mBed.readline();
+	}while(nLines==0);
 	// cout << "received " <<nChars <<"characters"<<endl;
-	nChars=sscanf(mBed.rxbuf,
+	nPars=sscanf(mBed.rxbuf,
 			"motor[1] is motorLED: nOrigin=%d, nNow=%d, motorSpd=%f steps/s, fullStep=%d, statusLEDMotor=%d, uSW(p29)=%d",
 			&motorLED.nOrigin, &motorLED.nNow,&motorLED.motorSpd, &motorLED.fullStep, &motorLED.statusLEDMotor, &motorLED.uSW);
 	// cout<<"received "<<nChars<<"parameters of motroLED"<<endl;
-	printf("moveMotor2Dest done! (statemain=%d)\r\n",statemain);
+	printf("moveMotor2Dest done! (statemain=%d): ",statemain);
 	// cout<<mBed.rxbuf<<endl;
 	printf("motorLED: nOrigin=%d, nNow=%d, motorSpd=%f, fullStep=%d, statusMotor=%d, uSW=%d\r\n",
 			motorLED.nOrigin, motorLED.nNow, motorLED.motorSpd, motorLED.fullStep, motorLED.statusLEDMotor,

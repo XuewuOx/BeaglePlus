@@ -291,7 +291,7 @@ int uartBeagle::readline()
 			/* null terminate the string*/
 			*rxbufptr='\0';
 			// scan rxbuf to find how many lines have been received
-			lineReceived=0;
+			lineReceived=1;
 			for (pChar=rxbuf+1;pChar<rxbufptr;pChar++)
 					{   if (pChar[-1]==0x0D && pChar[0]==0x0A)
 						lineReceived++;
@@ -306,9 +306,12 @@ int uartBeagle::readline()
 							rxbufptr-rxbuf, nTotalChar);
 					nTotalChar=rxbufptr-rxbuf;
 				}
+				cout<<"string ended with \\n or \\r received, lineReceived="<<lineReceived<<endl;
+				cout<<rxbuf<<endl;
 				rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf
 				                // for receiving next command line
 				nTotalChar=0;
+
 		 	return lineReceived;
 		}
 	  }

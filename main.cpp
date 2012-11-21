@@ -35,7 +35,7 @@ uartBeagle mBed("mBed");
 uartBeagle PC("PC");
 
 #define MAXROW_DATA 20
-#define MAXCOL_DATA 10
+#define MAXCOL_DATA 500
 
 int dataUV[MAXROW_DATA][MAXCOL_DATA];
 int dataIR[MAXROW_DATA][MAXCOL_DATA];
@@ -114,7 +114,9 @@ int main(int argc, char* argv[]) {
     usleep(1000);
     //----------------------------------
 	PC.uartwriteStr("Beagle starts\r\n");
-	mBed.uartwriteStr("Beagle starts\r\n");
+	PC.uartwriteStr("resetmbed\r\n");
+	usleep(1000);
+
 	// Assign a handler to close the serial port on Ctrl+C.
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
@@ -148,7 +150,7 @@ int main(int argc, char* argv[]) {
 			statemain=MOVEMOTOR; //2
 			// moveMotor2Switch();
 			// move motor for reference measurement
-			moveMotor2Dest(80);
+			moveMotor2Dest(-80);
 			statemain=SWN; //3
 			mBed.uartwriteStr("uvs00\r\n");
 			// fgets(tempbuff, 100, uart_mBed);
@@ -171,9 +173,9 @@ int main(int argc, char* argv[]) {
 				continue; // ignore the data and continue the main loop
 			}
 
-			printf("SWN done! Press any key to resume\r\n");
-			getchar();
-/*
+		    // printf("SWN done! Press any key to resume\r\n");
+			// getchar();
+
 			// Data processing
 			double sigmaUV, muUV, aUV;
 			double sigmaIR, muIR, aIR;
@@ -192,7 +194,10 @@ int main(int argc, char* argv[]) {
 				  	  yyUV[i]+=dataUV[i][j];
 				  yyUV[i]=yyUV[i]/MAXCOL_DATA;
 				}
-		    gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
+		   for (int i=0; i<MAXROW_DATA;i++)
+			   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", xx[i],yyIR[i], yyUV[i]);
+
+			gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
 		    gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
 		    int posOptIR=round(muIR); // aligned by IR
 
@@ -202,7 +207,7 @@ int main(int argc, char* argv[]) {
 		    string strPkt;
 		    mBed.readPkt("MOTORxxx","xxxx",strPkt);
 		    daqUVIR(Fs, nSample, dataIR, dataUV);
-*/
+
 		} // end of if (elapsed_secs>=10)
 		process_UART();
 		if (strncmp(PC.rxbuf, "quit",4)==0)
@@ -262,7 +267,8 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	cout<<"send '"<<dataStr<<"' down to mBed"<<endl;
 	size_t found0, found2;
 
-	mBed.readPkt("M posA=","DATAIRUVEND",strRx);
+	// mBed.readPkt("M posA=","DATAIRUVEND",strRx);
+	mBed.readPktTimeout("M posA=","DATAIRUVEND",strRx,10000);
 	/*
 	cout<<"========================================"<<endl;
 	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;

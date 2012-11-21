@@ -207,29 +207,36 @@ int uartBeagle::readUntilStr(char *strEnd)
 }
 
 
-int uartBeagle::readPktTimeout(char *strHead, char *strTail,char *strPkt, double timeout_ms)
+int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, double timeout_ms)
 {
-	string strRx;
+
 	size_t found0, found2;
     int n_usleeps;
+    cout<<"readPktTimeOut("<<(int)timeout_ms<<"ms) is waiting for data "<<endl;
     n_usleeps=int(timeout_ms);
 		while(1)
 		{   usleep(1000);
-			readline();
+			if (uartread()>0)
+			{
 			// cout<<"mBed.rxbuf length="<<strRx.length()<<"nTotoalChar="<<nTotalChar;
 			// cout<<"lineReceived="<<mBed.lineReceived<<endl;
 			strRx.append(rxbuf);
+
 			// mBed.rxbufptr=mBed.rxbuf;
 			found0=strRx.find(strHead);
 			found2=strRx.find(strTail);
+			// cout<<"found0("<<strHead<<")="<<(int)found0<<", found2("<<strTail<<")="<<(int)found2<<endl;
 			if (found0!=string::npos && found2!=string::npos)
-			{	cout <<"first '"<<strHead<<"' found at: "<<int(found0)<<endl;
+				{cout <<"first '"<<strHead<<"' found at: "<<int(found0)<<endl;
 				cout <<"first '"<<strTail<< "' found at: "<<int(found2)<<endl;
+				cout << "remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
 				strRx.erase(found2+strlen(strTail));
 				strRx.erase(0,found0-1);
-				strRx.copy(strPkt, 0, strRx.length());
-				strPkt[strRx.length()]='\0';
+				cout <<"Now strRx.length()="<<strRx.length()<<endl;
+				// strRx.copy(strPkt, 0, strRx.length());
+				// strPkt[strRx.length()]='\0';
 				break;
+				}
 			}
 			if (n_usleeps<0)
 				continue;
@@ -239,6 +246,7 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,char *strPkt, double
 				n_usleeps--;
 
 		}
+		cout<<"uartBeagle::readPktTimeout() returns"<<endl;
 		return strRx.length();
 }
 

@@ -51,7 +51,7 @@ public:
 
 	int readUntilStr(char *strEnd);
 	int readPkt(char *strHead, char *strTail,string &strRx);
-	int readPktTimeout(char *strHead, char *strTail,char *strPkt, double timeout_ms);
+	int readPktTimeout(char *strHead, char *strTail,string &strPkt, double timeout_ms);
 
 	int init_uart(void);
 	void uartclose();

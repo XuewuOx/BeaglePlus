@@ -44,13 +44,16 @@ int *pdataIR;
 int nline;
 
 // int statemain; // 0 init; 1 IDLE; 2 SWN  3 DAQ
-enum {
+enum MAINSTATUS{
 	INIT =0,
 	IDLE =1,
 	MOVEMOTOR =2,
 	SWN =3,
-	DAQ =4
-}statemain;
+	DAQ =4,
+	MBEDONLY =5
+};
+
+int statemain;
 
 struct MOTORSTATUS{
 	int nOrigin;
@@ -64,7 +67,8 @@ struct MOTORSTATUS{
 MOTORSTATUS motorLED;
 
 void setBeagleRTC(void);
-void process_UART();
+// void process_UART();
+void process_UART(int *pstatemain);
 void  sigint_handler(int sig);
 void testMatabCode();
 void init_main(char *pNamemBed);
@@ -129,112 +133,120 @@ int main(int argc, char* argv[]) {
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
-	t1-=60;
+	t1-=60; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
-	while (1)
-	{
-		// tNow=clock();
-		// elapsed_secs=(double) (tNow - tLast)/(CLOCKS_PER_SEC);
+
+while (1)
+{
+	switch (statemain) {
+	case IDLE:
+	case MBEDONLY:
+	  {
+		process_UART(&statemain);
 		time(&t2);
+		// printf("check new time t2\r\n");
 		elapsed_secs=difftime(t2,t1);
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
-		if (elapsed_secs>=30)
-		{
-			nDAQ++;
-			struct tm * timeinfo= localtime(&t2);
-			printf("[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-				    		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-			printf("start %d-th UV/IR measurement\n",nDAQ);
+		if (elapsed_secs>=10)
+			{
 			t1=t2;
-
-			statemain=MOVEMOTOR; //2
-			// moveMotor2Switch();
-			// move motor for reference measurement
-			moveMotor2Dest(-80);
-			statemain=SWN; //3
-			mBed.uartwriteStr("uvs00\r\n");
-			// fgets(tempbuff, 100, uart_mBed);
-			usleep(100);
-			mBed.uartwriteStr("irs00\r\n");
-			usleep(100);
-			mBed.uartread();
-			int nChn, Fs, nSample;
-			nChn=0; Fs=1000; nSample=1;
-			sprintf(tempStr,"a2d %d %d %d\r\n",nChn, Fs, nSample);
-			// mBed.uartwriteStr(tempStr);
-			usleep(100);
-			mBed.uartread();
-
-		    int posA, posB, nSam;
-			posA=91; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
-			if (daqBySWN(posA, MAXROW_DATA, nSam, dataIR, dataUV)==-1)
-			{ // something wrong
-				cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
-				continue; // ignore the data and continue the main loop
+			printf("skip DAQ for debuging \r\n");
+			 // statemain=DAQ;
 			}
-
-		    // printf("SWN done! Press any key to resume\r\n");
-			// getchar();
-
-			// Data processing
-			double sigmaUV, muUV, aUV;
-			double sigmaIR, muIR, aIR;
-			// int xx[MAXROW_DATA];
-			double xx[MAXROW_DATA];
-			double yyIR[MAXROW_DATA], yyUV[MAXROW_DATA];
-			for (int i=0;i<MAXROW_DATA;i++)
-				{ xx[i]=posA+i;
-				  yyIR[i]=0;
-				  for (int j=0;j<MAXCOL_DATA;j++)
-					  yyIR[i]+=dataIR[i][j];
-				  yyIR[i]=yyIR[i]/MAXCOL_DATA;
-
-				  yyUV[i]=0;
-				  for (int j=0;j<MAXCOL_DATA;j++)
-				  	  yyUV[i]+=dataUV[i][j];
-				  yyUV[i]=yyUV[i]/MAXCOL_DATA;
-				}
-		   for (int i=0; i<MAXROW_DATA;i++)
-			   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", xx[i],yyIR[i], yyUV[i]);
-
-			gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
-		    gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
-		    int posOptIR=round(muIR); // aligned by IR
-
-		    sprintf(tempStr,"move -d 1 %d\r\n",posOptIR);
-		    mBed.uartwriteStr(tempStr);
-            // TODO:
-		    string strPkt;
-		    mBed.readPkt("MOTORxxx","xxxx",strPkt);
-		    daqUVIR(Fs, nSample, dataIR, dataUV);
-
-		} // end of if (elapsed_secs>=10)
-		process_UART();
-		if (strncmp(PC.rxbuf, "quit",4)==0)
-		{   // quit the programme
-			PC.uartwriteStr("Program is going to kill itself, good bye\n");
-			sigint_handler(15);
-			return 0;
+		break;
 		}
-		if (strncmp(PC.rxbuf,"settime",7)==0)
-		{
-			printf("Do you want to set a new time? (Y/N)\n");
-			char chgTime;
-			scanf("%s",&chgTime);
-			if (chgTime=='Y' || chgTime=='y')
-			{ setBeagleRTC();
-						}
-		}
-		// TODO: The application can perform other tasks here.
+	case DAQ:
+	{
+		nDAQ++;
+		struct tm * timeinfo= localtime(&t2);
+		printf("[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+							timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+		printf("start %d-th UV/IR measurement\n",nDAQ);
+		t1=t2;
 
+		statemain=MOVEMOTOR; //2
+		// moveMotor2Switch();
+		// move motor for reference measurement
+		moveMotor2Dest(-80);
+		statemain=SWN; //3
+		mBed.uartwriteStr("uvs00\r\n");
+		// fgets(tempbuff, 100, uart_mBed);
+		usleep(100);
+		mBed.uartwriteStr("irs00\r\n");
+		usleep(100);
+		// mBed.uartread();
+		int nChn, Fs, nSample;
+		nChn=0; Fs=1000; nSample=1;
+		sprintf(tempStr,"a2d %d %d %d\r\n",nChn, Fs, nSample);
+		// mBed.uartwriteStr(tempStr);
+		usleep(100);
+		mBed.uartread();
+		mBed.flushrxbuf();
+
+		statemain=SWN;
+		int posA, posB, nSam;
+		posA=91; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
+		if (daqBySWN(posA, MAXROW_DATA, nSam, dataIR, dataUV)==-1)
+		{ // something wrong
+			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
+			continue; // ignore the data and continue the main loop
+		}
+
+		// printf("SWN done! Press any key to resume\r\n");
+		// getchar();
+
+		// Data processing
+		double sigmaUV, muUV, aUV;
+		double sigmaIR, muIR, aIR;
+		// int xx[MAXROW_DATA];
+		double xx[MAXROW_DATA];
+		double yyIR[MAXROW_DATA], yyUV[MAXROW_DATA];
+		for (int i=0;i<MAXROW_DATA;i++)
+			{ xx[i]=posA+i;
+			  yyIR[i]=0;
+			  for (int j=0;j<MAXCOL_DATA;j++)
+				  yyIR[i]+=dataIR[i][j];
+			  yyIR[i]=yyIR[i]/MAXCOL_DATA;
+
+			  yyUV[i]=0;
+			  for (int j=0;j<MAXCOL_DATA;j++)
+				  yyUV[i]+=dataUV[i][j];
+			  yyUV[i]=yyUV[i]/MAXCOL_DATA;
+			}
+	   for (int i=0; i<MAXROW_DATA;i++)
+		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", xx[i],yyIR[i], yyUV[i]);
+
+		gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
+		gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
+		int posOptIR=round(muIR); // aligned by IR
+
+		sprintf(tempStr,"move -d 1 %d\r\n",posOptIR);
+		mBed.uartwriteStr(tempStr);
+		// TODO:
+		string strPkt;
+		mBed.readPkt("MOTORxxx","xxxx",strPkt);
+		daqUVIR(Fs, nSample, dataIR, dataUV);
+
+		statemain=IDLE;
+		break;
+	} // end of case DAQ
+	//-------------------------------------------
+	default:
+	{   statemain=IDLE;
+		printf("WARN: case statemain = default. reset statemain=IDLE\r\n");
 	}
-	cout<<"=== main loop exit! ==="<<endl;
-	return 0;
 
-    //----------------------------------
-    PC.uartclose();
-    mBed.uartclose();
+   }  // end of switch (statemain)
 
+	// TODO: The application can perform other tasks here.
+
+} // end of while (1)
+//----------------------------------
+
+    cout<<"=== EXCEPTION main loop exit! ==="<<endl;
+    PC.uartwriteStr("EXCEPTION main loop exit\r\n");
+    usleep(1000);
+	sigint_handler(15);
     return 0;
 }
 
@@ -382,60 +394,98 @@ void testMatabCode()
 	 printf("sigma=%f, mu=%f, A=%f\n",sigma, mu, A);
 }
 // process UART strings
-void process_UART()
+void process_UART(int *pstatemain)
 {
 
 	int chars_read;
+	int recvLines_mBed, recvLines_PC;
 
-		// Read received mBed data and forward to PC
-		// up to but not including the buffer's terminating null.
-		// chars_read=mBed.uartread();
-		chars_read=mBed.readline();
-		if (chars_read > 0)
+	recvLines_mBed=0;
+	recvLines_PC=0;
+	if (*pstatemain!=IDLE && *pstatemain!=MBEDONLY)
 		{
-			// Data was read.
-			// mBed.rxbuf[chars_read]=0x00; // terminate string
-			printf("mBed->BB: %s", mBed.rxbuf);
-			printf("\n"); //mBed does not send \n, manually add \n to stdio
-	//		PC.uartwriteChar(mBed.rxbuf,chars_read);
-	//		respond_to_command(read_buffer, chars_read);
-	//		mBed.flushrxbuf();
+		printf("We only process UART when statemain==IDLE\r\n");
+		return;
 		}
 
+	// statemain is IDLE, process UART and change statemain accordingly
+cout<<"statemain="<<*pstatemain<<endl;
+	// Read received mBed data and forward to PC
+	// chars_read=mBed.readline();// read characters
+	recvLines_mBed=mBed.readline(); // returns how many lines have been received
+	if (recvLines_mBed > 0)
+	{
+		printf("mBed->BB: %s", mBed.rxbuf);
+		printf("\n"); //mBed may not send \n, manually add \n to stdio
+		mBed.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+	}
 
-	    // Read received command from PC
-		// chars_read = PC.uartread();
-		int line_read=PC.readline();
-		// printf("chars_read PC =%d\n", chars_read);
-		if (line_read > 0)
+    // Read received command from PC
+	// chars_read = PC.uartread(); // read characters
+	recvLines_mBed=PC.readline();
+	if  (recvLines_PC>0)
+	{
+		PC.uartwriteStr(PC.rxbuf);
+		/*  process special command from PC */
+		// NOTE: Putty console does not send \n at the end of the string
+		// therefore, not check \n as the end of the string
+		if (strncmp(PC.rxbuf, "quit\r",5)==0)
+		{   // quit the programme
+			PC.uartwriteStr("Program is going to kill itself, good bye\n");
+			sigint_handler(15); // program terminates here
+			return;
+	     }
+		if (strncmp(PC.rxbuf,"settime\r",8)==0)
 		{
-			    // PC.flushrxbuf();
-				// PC.rxbuf[chars_read]=0x00; // terminate string
-				// printf("chars_read=%d, %s",chars_read, read_buffer);
-				printf("PC->mBed (line=%d): %s", line_read, PC.rxbuf);
-				{
-				/*
-				    pdataUV=dataUV+nline*5;
-					sscanf(PC.rxbuf,"%d %d %d %d %d", pdataUV, pdataUV+1, pdataUV+2, pdataUV+3, pdataUV+4);
-					nline++;
-					if (nline==4)
-						{ printf("received data are:\n");
-						  for (int i=1; i<20;i++)
-							{ printf("%d ", dataUV[i]);
-							  if (i%5==0) printf("\n");
-							}
-						  printf("\n");
-						  nline=0;
-						}
-				*/
-				}
-
-				//PC.rxbuf[chars_read-2]=0x30;
-				// PC.uartwriteChar(PC.rxbuf, chars_read);
-				mBed.uartwriteChar(PC.rxbuf, chars_read);
+			printf("Do you want to set a new time? (Y/N)\n");
+			char chgTime;
+			scanf("%s",&chgTime);
+			if (chgTime=='Y' || chgTime=='y')
+				setBeagleRTC();
+			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			return;
+		}
+		if (strncmp(PC.rxbuf,"mbed\r",5)==0)
+		{
+			printf("SWITCH from %d to mBed mode (statemain=%d MBEDONLY). Connect to mBed directly\r\n",
+			*pstatemain, MBEDONLY);
+			*pstatemain=MBEDONLY;
+			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			return;
 		}
 
-}
+		if (strncmp(PC.rxbuf, "idle\r",5)==0)
+		{  // quit the programme
+		   printf("SWITCH from %d to IDLE mode (statemain=%d MBEDONLY). Connect to mBed directly\r\n",
+							*pstatemain, IDLE);
+		   PC.uartwriteStr("%switch back to IDLE\r\n");
+		   *pstatemain=IDLE;
+			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			return;
+		}
+
+		//Otherwise, forward recieved string to console and mBed
+		printf("PC->mBed (line=%d): %s", recvLines_PC, PC.rxbuf);
+		mBed.uartwriteChar(PC.rxbuf, chars_read);
+        PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+	} // end of if (PC.readline())
+	    /*  DEBUG code: simulate the string received from PC or mBed
+
+		pdataUV=dataUV+nline*5;
+		sscanf(PC.rxbuf,"%d %d %d %d %d", pdataUV, pdataUV+1, pdataUV+2, pdataUV+3, pdataUV+4);
+		nline++;
+		if (nline==4)
+		{ printf("received data are:\n");
+		  for (int i=1; i<20;i++)
+			{ printf("%d ", dataUV[i]);
+			  if (i%5==0) printf("\n");
+			}
+		  printf("\n");
+		  nline=0;
+		}
+      */
+
+}  // end of process_UART()
 
 // move Motor to destination
 // Input: destination in steps
@@ -513,6 +563,12 @@ void init_main(char *pNamemBed)
 
 	time_t rawt = time(NULL); // /* Seconds since the Epoch. 1970-01-01  */
 	struct tm * timeinfo;
+
+   printf("Enter  $ sudo /home/ubuntu/restore_DHCPconsole\r\n");
+   printf("     to reboot the Beagle with DHCP and console over ttyO2\r\n");
+   printf("Enter  $ sudo /home/ubuntu/restore_IP10.2.1.3ttyO2\r\n");
+   printf("     to reboot the Beagle with IP=10.2.1.3 and without console over ttyO2\r\n");
+
 	printf("\n=================================================\n");
 	printf("    Loadmon Beagle main() starts at \n");
 	/* get current timeinfo and modify it to the user's choice */

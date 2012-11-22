@@ -1,0 +1,12 @@
+#! /bin/bash
+echo "Restore to DHCP, ttyO2 console and reboot"
+
+echo "cp /etc/network/interfaces.static.10-2-1-3 /etc/network/interfaces"
+echo "rm /etc/init/ttyO2.conf"
+echo "reboot"
+
+cp /etc/network/interfaces.static.10-2-1-3 /etc/network/interfaces
+rm /etc/init/ttyO2.conf
+reboot
+
+

@@ -1,0 +1,20 @@
+#! /bin/bash
+#  ./restore_DHCPconsole password
+
+echo "Restore to DHCP, ttyO2 console and reboot"
+
+echo "sudo cp /etc/network/interfaces.dhcp /etc/network/interfaces"
+echo "sudo cp /etc/init/ttyO2.conf.save /etc/init/ttyO2.conf"
+echo "sudo reboot"
+
+
+set pass [lrange $argv 0 0]
+cp /etc/network/interfaces.dhcp /etc/network/interfaces
+expect "*?assword:*"
+send -- "$pass\r"
+cp /etc/init/ttyO2.conf.save /etc/init/ttyO2.conf
+send -- "$pass\r"
+reboot
+send -- "$pass\r"
+# send -- "\r"
+# interact

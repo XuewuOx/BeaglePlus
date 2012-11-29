@@ -356,7 +356,7 @@ int uartBeagle::uartwriteChar(char *write_buffer, int nChar)
 	bytes_written = write(uartID, write_buffer, len);
 	if (bytes_written < len)
 	{
-		printf("Write searial(uartID=%d) failed \n", uartID);
+		printf("Write searial (portName=%s) failed \n", portName);
 		return -1;
 	}
 	return bytes_written;

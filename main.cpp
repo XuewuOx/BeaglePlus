@@ -66,7 +66,7 @@ struct MOTORSTATUS{
 
 MOTORSTATUS motorLED;
 
-void setBeagleRTC(void);
+
 // void process_UART();
 void process_UART(int *pstatemain);
 void  sigint_handler(int sig);
@@ -77,6 +77,9 @@ int moveMotor2Dest(int dest);
 
 int daqBySWN(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
+void setBeagleRTC(void);
+void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
+
 
 
 int main(int argc, char* argv[]) {
@@ -118,13 +121,14 @@ int main(int argc, char* argv[]) {
     usleep(1000);
     //----------------------------------
 	PC.uartwriteStr("Beagle starts\r\n");
-	PC.uartwriteStr("resetmbed\r\n");
+	// PC.uartwriteStr("resetmbed\r\n");
 	usleep(1000);
 
 	// Assign a handler to close the serial port on Ctrl+C.
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
 
+	PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
@@ -140,7 +144,6 @@ while (1)
 {
 	switch (statemain) {
 	case IDLE:
-	case MBEDONLY:
 	  {
 		process_UART(&statemain);
 		time(&t2);
@@ -155,6 +158,10 @@ while (1)
 			}
 		break;
 		}
+	case MBEDONLY:
+	  {	process_UART(&statemain);
+	  	break;
+	  }
 	case DAQ:
 	{
 		nDAQ++;
@@ -409,8 +416,7 @@ void process_UART(int *pstatemain)
 		}
 
 	// statemain is IDLE, process UART and change statemain accordingly
-cout<<"statemain="<<*pstatemain<<endl;
-	// Read received mBed data and forward to PC
+    // Read received mBed data and forward to PC
 	// chars_read=mBed.readline();// read characters
 	recvLines_mBed=mBed.readline(); // returns how many lines have been received
 	if (recvLines_mBed > 0)
@@ -422,26 +428,31 @@ cout<<"statemain="<<*pstatemain<<endl;
 
     // Read received command from PC
 	// chars_read = PC.uartread(); // read characters
-	recvLines_mBed=PC.readline();
+	recvLines_PC=PC.readline();
 	if  (recvLines_PC>0)
 	{
+		// cout<<"received string from PC statemain="<<*pstatemain<<endl;
 		PC.uartwriteStr(PC.rxbuf);
 		/*  process special command from PC */
 		// NOTE: Putty console does not send \n at the end of the string
 		// therefore, not check \n as the end of the string
 		if (strncmp(PC.rxbuf, "quit\r",5)==0)
 		{   // quit the programme
-			PC.uartwriteStr("Program is going to kill itself, good bye\n");
+			PC.uartwriteStr("% Program is going to kill itself, good bye\n");
 			sigint_handler(15); // program terminates here
 			return;
 	     }
-		if (strncmp(PC.rxbuf,"settime\r",8)==0)
+		if (strncmp(PC.rxbuf,"settime",7)==0)
 		{
-			printf("Do you want to set a new time? (Y/N)\n");
-			char chgTime;
-			scanf("%s",&chgTime);
-			if (chgTime=='Y' || chgTime=='y')
-				setBeagleRTC();
+			int nArg;
+			int yy, mm ,dd, hh, min, ss;
+			nArg=sscanf(PC.rxbuf, "settime %d/%d/%d %d:%d:%d",&dd,&mm, &yy, &hh, &min, &ss);
+			if (nArg==6)
+				setBeagleRTC2(yy, mm, dd, hh, min, ss);
+			else
+			{PC.uartwriteStr("% settime command has incorrect parameters, Ignored.\r\n");
+			printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", PC.rxbuf);
+			}
 			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
 		}
@@ -456,7 +467,7 @@ cout<<"statemain="<<*pstatemain<<endl;
 
 		if (strncmp(PC.rxbuf, "idle\r",5)==0)
 		{  // quit the programme
-		   printf("SWITCH from %d to IDLE mode (statemain=%d MBEDONLY). Connect to mBed directly\r\n",
+		   printf("SWITCH from %d to IDLE mode (statemain=%d IDLE). \r\n",
 							*pstatemain, IDLE);
 		   PC.uartwriteStr("%switch back to IDLE\r\n");
 		   *pstatemain=IDLE;
@@ -466,7 +477,8 @@ cout<<"statemain="<<*pstatemain<<endl;
 
 		//Otherwise, forward recieved string to console and mBed
 		printf("PC->mBed (line=%d): %s", recvLines_PC, PC.rxbuf);
-		mBed.uartwriteChar(PC.rxbuf, chars_read);
+		// mBed.uartwriteChar(PC.rxbuf, chars_read);
+		mBed.uartwriteStr(PC.rxbuf);
         PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 	} // end of if (PC.readline())
 	    /*  DEBUG code: simulate the string received from PC or mBed
@@ -593,28 +605,38 @@ void init_main(char *pNamemBed)
 
 void setBeagleRTC(void)
 {
+	 int year, month ,day, hh, mm, ss;
+
+	 printf("Do you want to set a new time? (Y/N)\r");
+	 char chgTime;
+	 // getc("%c",&chgTime);
+	 chgTime=getchar();
+	 if (chgTime=='Y' || chgTime=='y')
+	 {	 /* prompt user for date */
+	 	 printf("Enter day/month/year: "); scanf("%d/%d/%d",&day, &month, &year);
+	     printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &mm, &ss);
+	     setBeagleRTC2(year, month, day, hh, mm, ss);
+	 }
+}
+
+void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss)
+{
 	time_t mytime;
 	// struct timespec rawtime;
 	struct timeval rawtime;
 	 struct tm * timeinfo;
-	 int year, month ,day, hh, mm, ss;
 	 char * weekday[] = { "Sunday", "Monday",
 	                      "Tuesday", "Wednesday",
 	                      "Thursday", "Friday", "Saturday"};
-
-	 /* prompt user for date */
-	 printf("Enter day/month/year: "); scanf("%d/%d/%d",&day, &month, &year);
-	 printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &mm, &ss);
-
 	 /* get current timeinfo and modify it to the user's choice */
 	 time ( &mytime ); // get mytime in seconds
 	 //  When interpreted as an absolute time value, it represents  the number of
 	 // seconds elapsed since the Epoch, 1970-01-01 00:00:00 +0000 (UTC).
 	 timeinfo = localtime ( &mytime );
 
-	 timeinfo->tm_year = year - 1900;
-	 timeinfo->tm_mon = month - 1;
-	 timeinfo->tm_mday = day;
+	 timeinfo->tm_year = yy - 1900;
+	 timeinfo->tm_mon = mm - 1;
+	 timeinfo->tm_mday = dd;
 timeinfo->tm_hour=hh;
 timeinfo->tm_min=mm;
 timeinfo->tm_sec=ss;
@@ -629,6 +651,5 @@ time ( &mytime );
 			 timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 
 }
-
 
 

@@ -25,6 +25,10 @@ using namespace std;
 #include "getRand.h"
 #include "gfit.h"
 #include "test.h"
+#include "gfit_rdfile.h"
+
+#define FALSE 0
+#define TRUE 1
 
 // Change the PORT_NAME for proparait  serial port
 // static const char *PORT_NAME = "/dev/ttyUSB0"; // for AirLink USB-232 converter
@@ -72,7 +76,7 @@ void process_UART(int *pstatemain);
 void  sigint_handler(int sig);
 void testMatabCode();
 void init_main(char *pNamemBed);
-void moveMotor2Switch();
+int moveMotor2Switch();
 int moveMotor2Dest(int dest);
 
 int daqBySWN(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
@@ -89,7 +93,7 @@ int main(int argc, char* argv[]) {
     double elapsed_secs;
     char *pNamemBed;
     int nChars;
-    char tempStr[300];
+    char tempStr[500];
 
     cout << "\n!!!Hello World!!!" << endl; // prints !!!Hello World!!!
     cout <<argv[0];
@@ -100,6 +104,7 @@ int main(int argc, char* argv[]) {
 
     double ax[5];
     int n;
+    int returnstate; // a variable returned by a function
 
     // string tempStr2("dir%d=[%d %d %d %d %d ]");
 
@@ -139,7 +144,7 @@ int main(int argc, char* argv[]) {
 	time(&t1);
 	t1-=60; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
-
+printf("main loop starts\r\n");
 while (1)
 {
 	switch (statemain) {
@@ -153,8 +158,8 @@ while (1)
 		if (elapsed_secs>=10)
 			{
 			t1=t2;
-			printf("skip DAQ for debuging \r\n");
-			 // statemain=DAQ;
+			// printf("skip DAQ for debuging \r\n");
+			statemain=DAQ;
 			}
 		break;
 		}
@@ -169,34 +174,67 @@ while (1)
 		printf("[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 							timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 		printf("start %d-th UV/IR measurement\n",nDAQ);
-		t1=t2;
 
+		sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+		PC.uartwriteStr(tempStr);
+		sprintf(tempStr,"start %d-th UV/IR measurement\n",nDAQ);
+		PC.uartwriteStr(tempStr);
+
+		t1=t2;
 		statemain=MOVEMOTOR; //2
-		// moveMotor2Switch();
+		if (moveMotor2Switch()<=0)
+		{  // moveMotor2Switch failed
+			cout<<"moveMotor2Switch failed. Skip DAQ, reset to IDLE"<<endl;
+			statemain=IDLE;
+			break;
+		}
+		mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
+		PC.uartwriteStr("setm 1 0 0 100 1\r\n");
+		usleep(100);
+		mBed.readline();
+
 		// move motor for reference measurement
-		moveMotor2Dest(-80);
+		// moveMotor2Dest(80);
 		statemain=SWN; //3
 		mBed.uartwriteStr("uvs00\r\n");
+		PC.uartwriteStr("uvs00\r\n");
+
 		// fgets(tempbuff, 100, uart_mBed);
 		usleep(100);
+		mBed.readline();
+
 		mBed.uartwriteStr("irs00\r\n");
+		PC.uartwriteStr("irs00\r\n");
 		usleep(100);
-		// mBed.uartread();
+
+		mBed.readline();
+
+		mBed.uartwriteStr("apdbv 143v\r\n");
+		PC.uartwriteStr("apdbv 143v\r\n");
+		usleep(100);
+		mBed.readline();
+
+/*
 		int nChn, Fs, nSample;
 		nChn=0; Fs=1000; nSample=1;
 		sprintf(tempStr,"a2d %d %d %d\r\n",nChn, Fs, nSample);
 		// mBed.uartwriteStr(tempStr);
 		usleep(100);
 		mBed.uartread();
+*/
 		mBed.flushrxbuf();
 
 		statemain=SWN;
 		int posA, posB, nSam;
 		posA=91; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
-		if (daqBySWN(posA, MAXROW_DATA, nSam, dataIR, dataUV)==-1)
+		int scanSteps=10; // MAXROW_DATA;
+//		if (daqBySWN(posA, scanSteps, nSam, dataIR, dataUV)==-1)
+		if (daqBySWN(posA, scanSteps, 10, dataIR, dataUV)==-1) // for debug
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
-			continue; // ignore the data and continue the main loop
+			statemain=IDLE;
+			break; // ignore the data and continue the main loop
 		}
 
 		// printf("SWN done! Press any key to resume\r\n");
@@ -223,32 +261,40 @@ while (1)
 	   for (int i=0; i<MAXROW_DATA;i++)
 		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", xx[i],yyIR[i], yyUV[i]);
 
-		gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
-		gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
+		// gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
+		// gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
 		int posOptIR=round(muIR); // aligned by IR
 
 		sprintf(tempStr,"move -d 1 %d\r\n",posOptIR);
 		mBed.uartwriteStr(tempStr);
+		usleep(100);
+		mBed.readline();
+
 		// TODO:
-		string strPkt;
-		mBed.readPkt("MOTORxxx","xxxx",strPkt);
-		daqUVIR(Fs, nSample, dataIR, dataUV);
+		// string strPkt;
+		// mBed.readPkt("MOTORxxx","xxxx",strPkt);
+		// daqUVIR(Fs, nSample, dataIR, dataUV);
 
 		statemain=IDLE;
 		break;
 	} // end of case DAQ
 	//-------------------------------------------
+
 	default:
 	{   statemain=IDLE;
 		printf("WARN: case statemain = default. reset statemain=IDLE\r\n");
 	}
 
-   }  // end of switch (statemain)
+  }  // end of switch (statemain)
+	//-------------------------------------------
 
-	// TODO: The application can perform other tasks here.
+
+  // TODO: The application can perform other tasks here.
+
 
 } // end of while (1)
 //----------------------------------
+
 
     cout<<"=== EXCEPTION main loop exit! ==="<<endl;
     PC.uartwriteStr("EXCEPTION main loop exit\r\n");
@@ -275,9 +321,10 @@ int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL
 //      0   valid data acquisition. nDataSteps_a2b rows, nSperS column data has been collected
 int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA])
 {
-	int i,j;
+	int i,j, nChar;
 	char dataStr[MAXCOL_DATA*MAXROW_DATA*5*2];
 	string strRx;
+	time_t tnow;
 
 	sprintf(dataStr,"swn %d %d %d\r\n",a,a+nDataSteps_a2b-1,nSperS);
 	mBed.flushrxbuf();
@@ -287,7 +334,41 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	size_t found0, found2;
 
 	// mBed.readPkt("M posA=","DATAIRUVEND",strRx);
-	mBed.readPktTimeout("M posA=","DATAIRUVEND",strRx,10000);
+	nChar=mBed.readPktTimeout("% swing LED from","DATAIRUVEND",strRx,20000);
+	if (nChar<=0)
+	{ // nothing valid received from mBed.
+		cout<<"Nothing valid received from mBed. "<<endl;
+
+		return -1; // return an ERROR
+	}
+	// valid packet received
+	// save it to a txt file
+	FILE *fdata;
+	time(&tnow);
+	struct tm * timeinfo= localtime(&tnow);
+
+
+	sprintf(dataStr,"ref_%04d%02d%02d_%02dh%02dm%02ds.txt",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+			timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	fdata=fopen(dataStr,"w"); //Create an empty file
+	if (fdata==NULL)
+	  { cout<<"fopen() to creat a data file "<<dataStr<<" failed."<<endl;
+		return -1; // return an ERROR
+	  }
+	fwrite(strRx.c_str(),1,strRx.length(), fdata);
+	fclose (fdata);
+	printf("save data to %s OK\n", dataStr);
+
+	fdata=fopen("ref.txt","w"); //Create an empty file
+		if (fdata==NULL)
+		  { cout<<"fopen() failed to create a data file ref.txt."<<endl;
+			return -1; // return an ERROR
+		  }
+	fwrite(strRx.c_str(),1,strRx.length(), fdata);
+	fclose (fdata);
+	printf("save data to ref.txt OK\n");
+
+
 	/*
 	cout<<"========================================"<<endl;
 	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
@@ -378,14 +459,16 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 // Test Matlab Code Generation
 void testMatabCode()
 {
+	/*	// Test codes for getRand() and gfit()
+
 	double xx[100];
 	double yy[100];
 
-	time_t rawt = time(NULL); // /* Seconds since the Epoch. 1970-01-01  */
+	time_t rawt = time(NULL); // Seconds since the Epoch. 1970-01-01
 	time(&rawt);
 
-	// getRand(rawt,yy);
-	getRand(10393,yy);
+	getRand(rawt,yy);
+    // getRand(10393,yy);
 	printf("[");
 	 for (int i=0;i<100;i++)
 		{	xx[i]=i;
@@ -394,11 +477,19 @@ void testMatabCode()
 		}
 	 printf("]\n");
 
-	 // function [sigma, mu, A] = gfit(x,y,h) %#codegen
-	//  gfit(const real_T x[100], const real_T y[100], real_T h, real_T *sigma, real_T *mu, real_T *A);
 	 double sigma, mu, A;
-	 gfit(xx,yy,0.2, &sigma, &mu, &A);
-	 printf("sigma=%f, mu=%f, A=%f\n",sigma, mu, A);
+
+	  // // function [sigma, mu, A] = gfit(x,y,h) %#codegen
+	  // //  gfit(const real_T x[100], const real_T y[100], real_T h, real_T *sigma, real_T *mu, real_T *A);
+	  gfit(xx,yy,0.2, &sigma, &mu, &A);
+	  printf("sigma=%f, mu=%f, A=%f\n",sigma, mu, A);
+*/
+
+	// test codes for gfit_rdfile
+	  int fsize[2];
+	  fsize[0]=1; fsize[1]=7;
+	 int optstep=gfit_rdfile("ref_test.txt", fsize);
+	 printf("reading ref_test.txt file successes and the opt step =%d\n",optstep);
 }
 // process UART strings
 void process_UART(int *pstatemain)
@@ -412,6 +503,7 @@ void process_UART(int *pstatemain)
 	if (*pstatemain!=IDLE && *pstatemain!=MBEDONLY)
 		{
 		printf("We only process UART when statemain==IDLE\r\n");
+		PC.uartwriteStr("We only process UART when statemain==IDLE\r\n");
 		return;
 		}
 
@@ -537,20 +629,51 @@ int moveMotor2Dest(int dest)
 }
 
 
-void moveMotor2Switch()
+int moveMotor2Switch()
 {
 	int nChars;
+	time_t t1, t2;
+	double wait_secs;
+	double Upbound_secs;
+    bool timeover;
 
+    Upbound_secs=60;
+    timeover=FALSE;
+	time(&t1);
+cout<<"start moving motor to switch"<<endl;
 	motorLED.uSW=0;
 	while(motorLED.uSW==0)
-	{	mBed.uartwriteStr("move -s 1 100\r\n");
+	{	mBed.uartwriteStr("move -s 1 -1000\r\n");
+		PC.uartwriteStr("move -s 1 -1000\r\n");
 		do{
 			nChars=mBed.readline();
+			time(&t2);
+			wait_secs=difftime(t2,t1);
+			if (wait_secs>Upbound_secs)
+			{
+				timeover=TRUE;
+				break;
+			}
 		}while(nChars==0);
-		cout<<mBed.rxbuf;
-		nChars=sscanf(mBed.rxbuf,
-			"motor[1] is motorLED: nOrigin=%d, nNow=%d, motorSpd=%f steps/s, fullStep=%d, statusLEDMotor=%d, uSW(p29)=%d",
-			&motorLED.nOrigin, &motorLED.nNow,&motorLED.motorSpd, &motorLED.fullStep, &motorLED.statusLEDMotor, &motorLED.uSW);
+
+		if (timeover==FALSE)
+		{
+			cout<<mBed.rxbuf;
+			nChars=sscanf(mBed.rxbuf,
+						"%% motor[1] is motorLED: nOrigin=%d, nNow=%d, motorSpd=%f steps/s, fullStep=%d, statusLEDMotor=%d, uSW(p29)=%d",
+						&motorLED.nOrigin, &motorLED.nNow,&motorLED.motorSpd, &motorLED.fullStep, &motorLED.statusLEDMotor, &motorLED.uSW);
+			// cout<<"movemotor2switch() receives  "<< mBed.rxbuf<<endl;
+			// cout<<"nChars="<<nChars<<", ";
+			cout<<"nNow="<<motorLED.nNow<<", return nChars="<<nChars<<endl;
+			return nChars;
+			// return 1;
+		}
+		else
+		{ // over time, no response
+			cout<<"moveMotor2Switch() time over. give up moving motor"<<endl;
+			return -1;
+		}
+
 	}
 }
 

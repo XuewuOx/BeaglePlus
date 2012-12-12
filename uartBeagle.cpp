@@ -212,6 +212,8 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 
 	size_t found0, found2;
     int n_usleeps;
+    int nChar;
+    nChar=0;
     cout<<"readPktTimeOut("<<(int)timeout_ms<<"ms) is waiting for data "<<endl;
     n_usleeps=int(timeout_ms);
 		while(1)
@@ -235,19 +237,23 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 				cout <<"Now strRx.length()="<<strRx.length()<<endl;
 				// strRx.copy(strPkt, 0, strRx.length());
 				// strPkt[strRx.length()]='\0';
+				nChar=strRx.length();
 				break;
 				}
 			}
 			if (n_usleeps<0)
 				continue;
 			else if(n_usleeps==0)
-				break;
+				{ 	nChar=0;
+					break;
+				}
 			else
 				n_usleeps--;
 
 		}
+
 		cout<<"uartBeagle::readPktTimeout() returns"<<endl;
-		return strRx.length();
+		return nChar;
 }
 
 // read a string beginning with strHead and terminated by strTail
@@ -321,6 +327,7 @@ int uartBeagle::readline()
 							rxbufptr-rxbuf, nTotalChar);
 					nTotalChar=rxbufptr-rxbuf;
 				}
+				//cout<<""
 				cout<<"string ended with \\n or \\r received, lineReceived="<<lineReceived<<endl;
 				cout<<rxbuf<<endl;
 				rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf

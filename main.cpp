@@ -135,10 +135,26 @@ int main(int argc, char* argv[]) {
 
 	PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
+	usleep(100);
+
+	PC.uartwriteStr("% move -s 1 300\r\n");
+	mBed.uartwriteStr("move -s 1 300\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
+
+	setBeagleRTC();
 	// mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-	statemain=IDLE; // 1
+	statemain=MBEDONLY; // 1
+	printf("Enter mbed mode be default for controlling mbed manually\r\n");
+	PC.uartwriteStr("Enter mbed mode be default for controlling mbed manually\r\n");
+	printf("   to see the mbed command, please reset mbed\r\n");
+	PC.uartwriteStr("   to see the mbed command, please reset mbed\r\n");
+	printf("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
+	printf("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
+	PC.uartwriteStr("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
+	PC.uartwriteStr("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
+
+
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);

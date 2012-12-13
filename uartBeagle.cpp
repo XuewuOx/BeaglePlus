@@ -22,6 +22,15 @@ using namespace std;
 
  // extern PC;
 extern uartBeagle PC;
+extern int statemain;
+enum MAINSTATUS{
+	INIT =0,
+	IDLE =1,
+	MOVEMOTOR =2,
+	SWN =3,
+	DAQ =4,
+	MBEDONLY =5
+};
 
 uartBeagle::uartBeagle(char *piName) {
 	nTotalChar=0;
@@ -319,7 +328,11 @@ int uartBeagle::readline()
 					}
 				// printf("receiv@readline(): %s",rxbuf);
 				if (strcmp(InstName,"mBed")==0)
-				    	PC.uartwriteChar(rxbuf, rxbufptr-rxbuf);
+				{
+					if (statemain=DAQ && strcmp(rxbuf,"% motor[")!=0)
+					        PC.uartwriteChar(rxbuf, rxbufptr-rxbuf);
+				}
+
 
 				if (rxbufptr-rxbuf>(int)nTotalChar)
 				{  // there are some char at the end of \r or \n, which will be lost
@@ -328,7 +341,7 @@ int uartBeagle::readline()
 					nTotalChar=rxbufptr-rxbuf;
 				}
 				//cout<<""
-				cout<<"string ended with \\n or \\r received, lineReceived="<<lineReceived<<endl;
+				// cout<<"string ended with \\n or \\r received, lineReceived="<<lineReceived<<endl;
 				cout<<rxbuf<<endl;
 				rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf
 				                // for receiving next command line

@@ -27,8 +27,8 @@ using namespace std;
 #include "test.h"
 #include "gfit_rdfile.h"
 
-#define FALSE 0
-#define TRUE 1
+// #define FALSE 0
+// #define TRUE 1
 
 // Change the PORT_NAME for proparait  serial port
 // static const char *PORT_NAME = "/dev/ttyUSB0"; // for AirLink USB-232 converter
@@ -133,12 +133,31 @@ int main(int argc, char* argv[]) {
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
 
-	PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
+	// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
+	printf("setm 1 0 30 100 1\r\n");
 	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
+	usleep(100);
+	// while (mBed.readline()==0){}
+
+	printf("move -d 1 300\r\n");
+	mBed.uartwriteStr("move -d 1 300\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
+
+	// setBeagleRTC();
+
 	// mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-	statemain=IDLE; // 1
+	statemain=MBEDONLY; // 1
+	PC.uartwriteStr("Enter mbed mode by default for controlling mbed manually\r\n");
+	printf("Enter mbed mode by default for controlling mbed manually\r\n");
+
+	PC.uartwriteStr("  Waiting for commands (for command information, please reset mbed\r\n");
+	PC.uartwriteStr("  To switch back to automatic beagle mode, type idle followed by Enter\r\n");
+	printf("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
+    printf("  To switch back to automatic beagle mode, type idle followed by Enter in AccessPort window\r\n");
+
+
+
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
@@ -151,6 +170,10 @@ while (1)
 	case IDLE:
 	  {
 		process_UART(&statemain);
+		if (statemain!=IDLE)
+		{ // the statemain has been changed by process_UART under the request of user
+		  break;
+		}
 		time(&t2);
 		// printf("check new time t2\r\n");
 		elapsed_secs=difftime(t2,t1);
@@ -233,6 +256,10 @@ while (1)
 		if (daqBySWN(posA, scanSteps, 10, dataIR, dataUV)==-1) // for debug
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
+			PC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
+			cout<<"============================="<<endl<<endl;
+			PC.uartwriteStr("% =======================\r\n\r\n");
+
 			statemain=IDLE;
 			break; // ignore the data and continue the main loop
 		}
@@ -334,7 +361,7 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	size_t found0, found2;
 
 	// mBed.readPkt("M posA=","DATAIRUVEND",strRx);
-	nChar=mBed.readPktTimeout("% swing LED from","DATAIRUVEND",strRx,20000);
+	nChar=mBed.readPktTimeout("%SWN posA=","DATAIRUVEND",strRx,20000);
 	if (nChar<=0)
 	{ // nothing valid received from mBed.
 		cout<<"Nothing valid received from mBed. "<<endl;
@@ -368,7 +395,22 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	fclose (fdata);
 	printf("save data to ref.txt OK\n");
 
-
+	  int fsize[2];
+	  fsize[0]=1; fsize[1]=strlen(dataStr);
+	 int optstep=gfit_rdfile(dataStr, fsize);
+	 if (optstep<=0)
+	 {
+		printf("reading %s or the Gaussian fitting failed.returned value =%d\n",dataStr,optstep);
+		char temStr[100];
+		sprintf(temStr,"\r\nreading %s or the Gaussian fitting failed. Returned value =%d\r\n",
+						dataStr,optstep);
+		PC.uartwriteStr(temStr);
+		return -1; // return an ERROR
+	 }
+	 printf("reading %s successes and the opt step =%d\n",dataStr,optstep);
+	char temStr[100];
+	sprintf(temStr,"\r\nreading %s successes and the opt step =%d\r\n",dataStr,optstep);
+	PC.uartwriteStr(temStr);
 	/*
 	cout<<"========================================"<<endl;
 	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
@@ -486,10 +528,17 @@ void testMatabCode()
 */
 
 	// test codes for gfit_rdfile
+	  char *fname="ref_test.txt";
 	  int fsize[2];
-	  fsize[0]=1; fsize[1]=7;
-	 int optstep=gfit_rdfile("ref_test.txt", fsize);
-	 printf("reading ref_test.txt file successes and the opt step =%d\n",optstep);
+	  fsize[0]=1; fsize[1]=strlen(fname);
+	 int optstep=gfit_rdfile(fname, fsize);
+	 if (optstep<=0)
+	 {
+		printf("reading ref_test.txt or the Gaussian fitting failed.returned value =%d\n",optstep);
+		return;
+	 }
+	 printf("reading ref_test.txt successes and the opt step =%d\n",optstep);
+
 }
 // process UART strings
 void process_UART(int *pstatemain)
@@ -551,7 +600,8 @@ void process_UART(int *pstatemain)
 		if (strncmp(PC.rxbuf,"mbed\r",5)==0)
 		{
 			printf("SWITCH from %d to mBed mode (statemain=%d MBEDONLY). Connect to mBed directly\r\n",
-			*pstatemain, MBEDONLY);
+					*pstatemain, MBEDONLY);
+			PC.uartwriteStr("SWITCH to mBed mode (MBEDONLY). Connect to mBed directly for manual control\r\n");
 			*pstatemain=MBEDONLY;
 			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
@@ -637,10 +687,10 @@ int moveMotor2Switch()
 	double Upbound_secs;
     bool timeover;
 
-    Upbound_secs=60;
+    Upbound_secs=30;
     timeover=FALSE;
 	time(&t1);
-cout<<"start moving motor to switch"<<endl;
+cout<<"move motor to switch position"<<endl;
 	motorLED.uSW=0;
 	while(motorLED.uSW==0)
 	{	mBed.uartwriteStr("move -s 1 -1000\r\n");

@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
 	printf("setm 1 0 30 100 1\r\n");
 	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
 	usleep(100);
-<<<<<<< HEAD
+
 	// while (mBed.readline()==0){}
 
 	printf("move -d 1 300\r\n");
@@ -157,8 +157,6 @@ int main(int argc, char* argv[]) {
 	printf("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
     printf("  To switch back to automatic beagle mode, type idle followed by Enter in AccessPort window\r\n");
 
-=======
-
 	PC.uartwriteStr("% move -s 1 300\r\n");
 	mBed.uartwriteStr("move -s 1 300\r\n");
 	usleep(1000);
@@ -175,8 +173,6 @@ int main(int argc, char* argv[]) {
 	printf("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
 	PC.uartwriteStr("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
 	PC.uartwriteStr("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
->>>>>>> Branch_b21357af5aec53dab3fd9df460121b7043cf69f0
-
 
 	// The main program loop:
 	time_t t1, t2;

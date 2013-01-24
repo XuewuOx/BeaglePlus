@@ -84,6 +84,7 @@ int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
 int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 void setBeagleRTC(void);
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
+void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
 
 
@@ -123,10 +124,11 @@ int main(int argc, char* argv[]) {
 
 
 	usleep(1000);
-    PC.uartwriteStr("PC.uartwriteStr() success\n");
+    // PC.uartwriteStr("PC.uartwriteStr() success\n");
     usleep(1000);
     //----------------------------------
 	PC.uartwriteStr("Beagle starts\r\n");
+
 	// PC.uartwriteStr("resetmbed\r\n");
 	usleep(1000);
 
@@ -134,6 +136,8 @@ int main(int argc, char* argv[]) {
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
 
+
+	PC.uartwriteStr("  Testing the motor ...");
 	// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 	// printf("setm 1 0 30 100 1\r\n");
 	// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
@@ -141,32 +145,41 @@ int main(int argc, char* argv[]) {
 
 	// while (mBed.readline()==0){}
 
-	printf("move -s 1 -300\r\n");
+	printf("move -s 1 -100\r\n");
 	mBed.uartwriteStr("move -s 1 -300\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
 
-	printf("move -s 1 300\r\n");
+	PC.uartwriteStr(" ... ");
+	printf("move -s 1 100\r\n");
 	mBed.uartwriteStr("move -s 1 300\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
 
-	// setBeagleRTC();
+	PC.uartwriteStr(" OK\r\n");
+
+	PC.uartwriteStr("  Set Beagle's time and date ... ");
+	setBeagleRTC();
+	struct timeval systime;
+	gettimeofday(&systime, NULL);
+	char * text_time = ctime(&systime.tv_sec);
+	PC.uartwriteStr("  OK! ");
+	PC.uartwriteStr(text_time);
 
 	statemain=MBEDONLY; // 1
-	PC.uartwriteStr("Enter mbed mode by default for controlling mbed manually\r\n");
+	PC.uartwriteStr("\r\n  Enter mbed mode by default for controlling mbed manually\r\n");
 	printf("Enter mbed mode by default for controlling mbed manually\r\n");
 
-	PC.uartwriteStr("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
+	PC.uartwriteStr("  Waiting for commands from USB/RS232 accessport\r\n");
 	printf("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
 
-	PC.uartwriteStr("   to see the mbed command, please reset mbed\r\n");
-	printf("   to see the mbed command, please reset mbed\r\n");
+	PC.uartwriteStr("      to see the mbed command, please reset mbed\r\n");
+	printf("      to see the mbed command, please reset mbed\r\n");
 
-	printf("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
-	printf("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
-	PC.uartwriteStr("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
-	PC.uartwriteStr("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
+	printf("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
+	printf("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
+	PC.uartwriteStr("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
+	PC.uartwriteStr("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
 
 	// The main program loop:
 	time_t t1, t2;
@@ -224,6 +237,7 @@ while (1)
 		}
 		mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
 		PC.uartwriteStr("setm 1 0 0 100 1\r\n");
+		cout<<"reset motor position by 'setm 1 0 0 100 1'\r\n";
 		usleep(100);
 		mBed.readline();
 
@@ -231,20 +245,24 @@ while (1)
 		// moveMotor2Dest(80);
 		statemain=SWN; //3
 
-		PC.uartwriteStr("disable uvs00 for debug\r\n");
-/*   disable uvs00 for debug
+	//	PC.uartwriteStr("disable uvs00 for debug\r\n");
+//   disable uvs00 for debug
 		mBed.uartwriteStr("uvs00\r\n");
 		PC.uartwriteStr("uvs00\r\n");
-*/
 		// fgets(tempbuff, 100, uart_mBed);
 		usleep(100);
 		mBed.readline();
 
-		mBed.uartwriteStr("irs00\r\n");
-		PC.uartwriteStr("irs00\r\n");
+		mBed.uartwriteStr("irs25\r\n");
+		PC.uartwriteStr("irs25\r\n");
 		usleep(100);
-
 		mBed.readline();
+
+		mBed.uartwriteStr("irg1\r\n");
+		PC.uartwriteStr("irg1\r\n");
+		usleep(100);
+		mBed.readline();
+
 
 		mBed.uartwriteStr("apdbv 143v\r\n");
 		PC.uartwriteStr("apdbv 143v\r\n");
@@ -270,11 +288,6 @@ while (1)
 		int swnOK;
 		// swnOK=daqBySWN(posA, scanSteps, nSam, dataIR, dataUV);
 		swnOK=daqBySWN(posA, scanSteps, 10, dataIR, dataUV); // for debug
-		mBed.uartwriteStr("irt\r\n");
-		PC.uartwriteStr("irt\r\n");
-
-		mBed.uartwriteStr("uvt\r\n");
-		PC.uartwriteStr("uvt\r\n");
 
 		if (swnOK==-1)
 		{ // something wrong
@@ -289,41 +302,54 @@ while (1)
 		// printf("SWN done! Press any key to resume\r\n");
 		// getchar();
 
-		// Data processing
-		double sigmaUV, muUV, aUV;
-		double sigmaIR, muIR, aIR;
-		// int xx[MAXROW_DATA];
-		double xx[MAXROW_DATA];
-		double yyIR[MAXROW_DATA], yyUV[MAXROW_DATA];
-		for (int i=0;i<MAXROW_DATA;i++)
-			{ xx[i]=posA+i;
-			  yyIR[i]=0;
-			  for (int j=0;j<MAXCOL_DATA;j++)
-				  yyIR[i]+=dataIR[i][j];
-			  yyIR[i]=yyIR[i]/MAXCOL_DATA;
+//=====================================================
+		// dataIR and dataUV now is saved as a string in *.txt file
+		// and processed fully by Matlab functions
+		// dataIR and dataUV is not accessed by main()
+/*
+*		// Data processing
+*		double sigmaUV, muUV, aUV;
+*		double sigmaIR, muIR, aIR;
+*		// int xx[MAXROW_DATA];
+*		double xx[MAXROW_DATA];
+*		double yyIR[MAXROW_DATA], yyUV[MAXROW_DATA];
+*		for (int i=0;i<MAXROW_DATA;i++)
+*			{ xx[i]=posA+i;
+*			  yyIR[i]=0;
+*			  for (int j=0;j<MAXCOL_DATA;j++)
+*				  yyIR[i]+=dataIR[i][j];
+*			  yyIR[i]=yyIR[i]/MAXCOL_DATA;
+*
+*			  yyUV[i]=0;
+*			  for (int j=0;j<MAXCOL_DATA;j++)
+*				  yyUV[i]+=dataUV[i][j];
+*			  yyUV[i]=yyUV[i]/MAXCOL_DATA;
+*			}
+*	   for (int i=0; i<MAXROW_DATA;i++)
+*		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", (int)round(xx[i]),yyIR[i], yyUV[i]);
+*
+*		// gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
+*		// gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
+*		int posOptIR=round(muIR); // aligned by IR
+*/
 
-			  yyUV[i]=0;
-			  for (int j=0;j<MAXCOL_DATA;j++)
-				  yyUV[i]+=dataUV[i][j];
-			  yyUV[i]=yyUV[i]/MAXCOL_DATA;
-			}
-	   for (int i=0; i<MAXROW_DATA;i++)
-		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", (int)round(xx[i]),yyIR[i], yyUV[i]);
-
-		// gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
-		// gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
-		int posOptIR=round(muIR); // aligned by IR
-
-		sprintf(tempStr,"move -d 1 %d\r\n",posOptIR);
+		int posOptUV=swnOK;
+		sprintf(tempStr,"move -d 1 %d\r\n",posOptUV);
 		mBed.uartwriteStr(tempStr);
+		PC.uartwriteStr(tempStr);
+		cout<<"move to peak postion "<<posOptUV<<endl;
 		usleep(100);
 		mBed.readline();
 
-		// TODO:
-		// string strPkt;
-		// mBed.readPkt("MOTORxxx","xxxx",strPkt);
+		// Collect UV IR data at the optimal position
 		// daqUVIR(Fs, nSample, dataIR, dataUV);
 
+		// turn off light sources
+		mBed.uartwriteStr("irt\r\n");
+		// PC.uartwriteStr("irt\r\n");
+		mBed.uartwriteStr("uvt\r\n");
+		// PC.uartwriteStr("uvt\r\n");
+		cout<<"turn off lights, \r\n   irt\r\n  irs\r\n";
 		statemain=IDLE;
 		break;
 	} // end of case DAQ
@@ -358,8 +384,9 @@ int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL
 {
 	int nChn=0;
 	char tempStr[30];
-	sprintf(tempStr,"a2d %d %d %d\r\n",nChn, Fs, nSamples);
+	sprintf(tempStr,"a2d s %d %d\r\n", Fs, nSamples);
     mBed.uartwriteStr(tempStr);
+
     string strData;
     // TODO:
     // mBed.readPkt("MOTORxxx","xxxx", strData);
@@ -374,6 +401,8 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 {
 	int i,j, nChar;
 	char dataStr[MAXCOL_DATA*MAXROW_DATA*5*2];
+	char fname[100];
+	char temStr[100];
 	string strRx;
 	time_t tnow;
 
@@ -399,16 +428,16 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	struct tm * timeinfo= localtime(&tnow);
 
 
-	sprintf(dataStr,"ref_%04d%02d%02d_%02dh%02dm%02ds.txt",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+	sprintf(fname,"ref_%04d%02d%02d_%02dh%02dm%02ds.txt",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 			timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	fdata=fopen(dataStr,"w"); //Create an empty file
+	fdata=fopen(fname,"w"); //Create an empty file
 	if (fdata==NULL)
-	  { cout<<"fopen() to creat a data file "<<dataStr<<" failed."<<endl;
+	  { cout<<"fopen() to creat a data file "<<fname<<" failed."<<endl;
 		return -1; // return an ERROR
 	  }
 	fwrite(strRx.c_str(),1,strRx.length(), fdata);
 	fclose (fdata);
-	printf("save data to %s OK\n", dataStr);
+	printf("save data to %s OK\n", fname);
 
 	fdata=fopen("ref.txt","w"); //Create an empty file
 		if (fdata==NULL)
@@ -419,106 +448,116 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	fclose (fdata);
 	printf("save data to ref.txt OK\n");
 
+
+	// Gaussian fitting to find the peak location
 	  int fsize[2];
-	  fsize[0]=1; fsize[1]=strlen(dataStr);
-	 int optstep=gfit_rdfile(dataStr, fsize);
+	  fsize[0]=1; fsize[1]=strlen(fname);
+	 int optstep=gfit_rdfile(fname, fsize);
 	 if (optstep<=0)
 	 {
-		printf("reading %s or the Gaussian fitting failed.returned value =%d\n",dataStr,optstep);
-		char temStr[100];
+		printf("reading %s or the Gaussian fitting failed. returned value =%d\n",dataStr,optstep);
 		sprintf(temStr,"\r\nreading %s or the Gaussian fitting failed. Returned value =%d\r\n",
 						dataStr,optstep);
 		PC.uartwriteStr(temStr);
 		return -1; // return an ERROR
 	 }
-	 printf("reading %s successes and the opt step =%d\n",dataStr,optstep);
-	char temStr[100];
-	sprintf(temStr,"\r\nreading %s successes and the opt step =%d\r\n",dataStr,optstep);
+	 printf("reading %s successes and the opt step =%d\n",fname,optstep);
+
+	sprintf(temStr,"\r\nreading %s successes and the opt step =%d\r\n",fname,optstep);
 	PC.uartwriteStr(temStr);
-	/*
-	cout<<"========================================"<<endl;
-	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
-	cout<<strRx<<endl;
-	cout<<"========================================"<<endl;
+	return optstep;
 
-	printf("\r\n----------------------------------------\r\n");
-	printf("printf full data packet found: %s",dataStr);
-	*/
-	int posA, nSteps, nSam, nFs, nArg;
-	// char charLE="\r\n";
-	string firstLine;
-	size_t posLE;
-	firstLine=strRx.substr(1,(int)(strRx.find("\r\n")));
-	strRx.erase(0,(int)(strRx.find("\r\n"))+1);
-	// cout<< "first line: "<<firstLine<<endl;
-	printf("desired values: posA=%d, nSteps=%d, nSam=%d\r\n",a,nDataSteps_a2b,nSperS);
-	nArg=sscanf(firstLine.c_str(),"M posA=%d, nSteps=%d, nSam=%d, Fs=%d",&posA,&nSteps, &nSam, &nFs);
-	printf("decaped values: posA=%d, nSteps=%d, nSam=%d\r\n",posA,nSteps,nSam);
-	if(nArg!=4 || posA!=a || nSteps!=nDataSteps_a2b || nSam!=nSperS )
-		{ printf("ERROR: wrong M posA=%d, nSteps=%d  nSam=%d from mBed\r\n", posA, nSteps, nSam);
-		  return -1; // return an ERROR
-		  // continue; // continue the main loop
-		}
-
-	// convert ASCII packet into int array
-	char leadStrIR[10], leadStrUV[10];
-	char *pStart, *pEnd;
-	size_t pNextLine;
-	int nDataChar;
-
-	for (i=0;i<nSteps;i++)
-		for (j=0; j<nSam; j++)
-			{ dataIR[i][j]=0xFFFF; dataUV[i][j]=0xFFFF;}
-
-	for (i=0;i<nSteps;i++)
-	{   sprintf(leadStrIR,"dir%03d=[ \0",i); //'\0' to terminate the string
-		found0=strRx.find(leadStrIR);
-		found2=strRx.find("\r\n");
-		nDataChar=found2-(found0+strlen(leadStrIR))-1;
-	    int lencpy=strRx.copy(dataStr,nDataChar,found0+strlen(leadStrIR));
-	    dataStr[lencpy]='\0'; // terminate the string
-		strRx.erase(0,found2+1); // remove one line
-		// cout<< "dataStr contains: "<<dataStr<<" OK "<<endl;
-	    //  printf("%d-th line IR: %s\r\n", i, dataStr);
-	    // printf("dataIR[%d][]=",i);
-	    pEnd=dataStr;
-	    for (int j=0;j<nSam;j++)
-		 	{ dataIR[i][j]=strtol(pEnd, &pEnd,10);
-		 	  // printf(" %d",dataIR[i][j]);
-		 	}
-	    // printf("\r\n");
-
-
-	    sprintf(leadStrUV,"duv%03d=[ \0",i);
-		found0=strRx.find(leadStrUV);
-		found2=strRx.find("\r\n");
-		nDataChar=found2-(found0+strlen(leadStrIR))-1;
-		// cout<<"found0="<<found0<<", found2="<< found2<<" nDataChar="<<nDataChar<<endl;
-		// TODO: check if nDataChar == nSam*(4+1)+2
-		// nDataChar=nSam*(4+1)+2; // how many chars in one data line
-		strRx.copy(dataStr,nDataChar,(int)found0+strlen(leadStrUV));
-	    dataStr[nDataChar]='\0'; // terminate the string
-		strRx.erase(0,found2+1); // remove one line
-		// printf("dataUV[%d][]=",i);
-	    pEnd=dataStr;
-		for (int j=0;j<nSam;j++)
-			dataUV[i][j]=strtol(pEnd, &pEnd,10);
-
-	 }
-	// printf the dataIR and dataUV int array
-	printf("dataIR and dataUV are:\r\n");
-	for (int i=0;i<nSteps;i++)
-		{  int j;
-		   printf("IR03%d=[",i);
-		   for (j=0; j<nSam;j++)
-			   printf(" %04d",dataIR[i][j]);
-		   printf("]\r\n");
-
-		   printf("UV03%d=[",i);
-		   for (j=0; j<nSam;j++)
-		  	   printf(" %04d",dataUV[i][j]);
-		   printf("]\r\n");
-		}
+//==================================================================================
+	// The following codes convert the received string into arrays dataIR and dataUV
+	// then pass dataIR and dataUV to a Matlab generated function for Guassian fitting
+	// Note: now we save string to *.txt file and have the Matlab function load data from
+	//       *.txt file, rather than directly send data arrays.
+/*
+*	cout<<"========================================"<<endl;
+*	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
+*	cout<<strRx<<endl;
+*	cout<<"========================================"<<endl;
+*
+*	printf("\r\n----------------------------------------\r\n");
+*	printf("printf full data packet found: %s",dataStr);
+*
+*	int posA, nSteps, nSam, nFs, nArg;
+*	// char charLE="\r\n";
+*	string firstLine;
+*	size_t posLE;
+*	firstLine=strRx.substr(1,(int)(strRx.find("\r\n")));
+*	strRx.erase(0,(int)(strRx.find("\r\n"))+1);
+*	// cout<< "first line: "<<firstLine<<endl;
+*	printf("desired values: posA=%d, nSteps=%d, nSam=%d\r\n",a,nDataSteps_a2b,nSperS);
+*	nArg=sscanf(firstLine.c_str(),"M posA=%d, nSteps=%d, nSam=%d, Fs=%d",&posA,&nSteps, &nSam, &nFs);
+*	printf("decaped values: posA=%d, nSteps=%d, nSam=%d\r\n",posA,nSteps,nSam);
+*	if(nArg!=4 || posA!=a || nSteps!=nDataSteps_a2b || nSam!=nSperS )
+*		{ printf("ERROR: wrong M posA=%d, nSteps=%d  nSam=%d from mBed\r\n", posA, nSteps, nSam);
+*		  return -1; // return an ERROR
+*		  // continue; // continue the main loop
+*		}
+*
+*	// convert ASCII packet into int array
+*	char leadStrIR[10], leadStrUV[10];
+*	char *pStart, *pEnd;
+*	size_t pNextLine;
+*	int nDataChar;
+*
+*	for (i=0;i<nSteps;i++)
+*		for (j=0; j<nSam; j++)
+*			{ dataIR[i][j]=0xFFFF; dataUV[i][j]=0xFFFF;}
+*
+*	for (i=0;i<nSteps;i++)
+*	{   sprintf(leadStrIR,"dir%03d=[ \0",i); //'\0' to terminate the string
+*		found0=strRx.find(leadStrIR);
+*		found2=strRx.find("\r\n");
+*		nDataChar=found2-(found0+strlen(leadStrIR))-1;
+*	    int lencpy=strRx.copy(dataStr,nDataChar,found0+strlen(leadStrIR));
+*	    dataStr[lencpy]='\0'; // terminate the string
+*		strRx.erase(0,found2+1); // remove one line
+*		// cout<< "dataStr contains: "<<dataStr<<" OK "<<endl;
+*	    //  printf("%d-th line IR: %s\r\n", i, dataStr);
+*	    // printf("dataIR[%d][]=",i);
+*	    pEnd=dataStr;
+*	    for (int j=0;j<nSam;j++)
+*		 	{ dataIR[i][j]=strtol(pEnd, &pEnd,10);
+*		 	  // printf(" %d",dataIR[i][j]);
+*		 	}
+*	    // printf("\r\n");
+*
+*
+*	    sprintf(leadStrUV,"duv%03d=[ \0",i);
+*		found0=strRx.find(leadStrUV);
+*		found2=strRx.find("\r\n");
+*		nDataChar=found2-(found0+strlen(leadStrIR))-1;
+*		// cout<<"found0="<<found0<<", found2="<< found2<<" nDataChar="<<nDataChar<<endl;
+*		// TODO: check if nDataChar == nSam*(4+1)+2
+*		// nDataChar=nSam*(4+1)+2; // how many chars in one data line
+*		strRx.copy(dataStr,nDataChar,(int)found0+strlen(leadStrUV));
+*	    dataStr[nDataChar]='\0'; // terminate the string
+*		strRx.erase(0,found2+1); // remove one line
+*		// printf("dataUV[%d][]=",i);
+*	    pEnd=dataStr;
+*		for (int j=0;j<nSam;j++)
+*			dataUV[i][j]=strtol(pEnd, &pEnd,10);
+*
+*	 }
+*	// printf the dataIR and dataUV int array
+*	printf("dataIR and dataUV are:\r\n");
+*	for (int i=0;i<nSteps;i++)
+*		{  int j;
+*		   printf("IR03%d=[",i);
+*		   for (j=0; j<nSam;j++)
+*			   printf(" %04d",dataIR[i][j]);
+*		   printf("]\r\n");
+*
+*		   printf("UV03%d=[",i);
+*		   for (j=0; j<nSam;j++)
+*		  	   printf(" %04d",dataUV[i][j]);
+*		   printf("]\r\n");
+*		}
+*/
+//==================================================================================
 	return 0;
 }
 
@@ -727,8 +766,8 @@ void process_UART(int *pstatemain)
 									*pstatemain);
 				   PC.uartwriteStr("%manually collect data and save to ref.txt \r\n");
 				   // int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
-				   manual_daqswn(1601, 1900, 10,0,0);
-				   // *pstatemain=DAQ;
+				   // manual_daqswn(1601, 1900, 10,0,0);
+				   *pstatemain=DAQ;
 				   return;
 				}
 
@@ -809,8 +848,8 @@ int moveMotor2Switch()
 cout<<"move motor to switch position"<<endl;
 	motorLED.uSW=0;
 	while(motorLED.uSW==0)
-	{	mBed.uartwriteStr("move -s 1 -1000\r\n");
-		PC.uartwriteStr("move -s 1 -1000\r\n");
+	{	mBed.uartwriteStr("move -s 1 -2000\r\n");
+		PC.uartwriteStr("move -s 1 -2000\r\n");
 		do{
 			nChars=mBed.readline();
 			time(&t2);
@@ -898,7 +937,7 @@ void init_main(char *pNamemBed)
 
 void setBeagleRTC(void)
 {
-	 int year, month ,day, hh, mm, ss;
+	 int year, month ,day, hh, min, ss;
 
 	 printf("Do you want to set a new time? (Y/N)\r");
 	 char chgTime;
@@ -907,41 +946,80 @@ void setBeagleRTC(void)
 	 if (chgTime=='Y' || chgTime=='y')
 	 {	 /* prompt user for date */
 	 	 printf("Enter day/month/year: "); scanf("%d/%d/%d",&day, &month, &year);
-	     printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &mm, &ss);
-	     setBeagleRTC2(year, month, day, hh, mm, ss);
+	     printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &min, &ss);
+	     // setBeagleRTC2(year, month, day, hh, min, ss);
+	    setBeagleRTC3(year, month, day, hh, min, ss);
 	 }
 }
 
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss)
 {
-	time_t mytime;
+	time_t mytime, t2;
+    char tempStr[500];
 	// struct timespec rawtime;
-	struct timeval rawtime;
-	 struct tm * timeinfo;
+	struct timeval systime;
+	 struct tm * timeinfo_ptr;
+	 struct tm timeinfo;
+
 	 char * weekday[] = { "Sunday", "Monday",
 	                      "Tuesday", "Wednesday",
 	                      "Thursday", "Friday", "Saturday"};
-	 /* get current timeinfo and modify it to the user's choice */
-	 time ( &mytime ); // get mytime in seconds
+
 	 //  When interpreted as an absolute time value, it represents  the number of
 	 // seconds elapsed since the Epoch, 1970-01-01 00:00:00 +0000 (UTC).
-	 timeinfo = localtime ( &mytime );
+	 timeinfo.tm_year = yy - 1900;
+	 timeinfo.tm_mon = mm - 1;
+	 timeinfo.tm_mday = dd;
+	 timeinfo.tm_hour=hh;
+	 timeinfo.tm_min=min;
+	 timeinfo.tm_sec=ss;
 
-	 timeinfo->tm_year = yy - 1900;
-	 timeinfo->tm_mon = mm - 1;
-	 timeinfo->tm_mday = dd;
-timeinfo->tm_hour=hh;
-timeinfo->tm_min=mm;
-timeinfo->tm_sec=ss;
-time ( &mytime );
-	 /* call mktime: timeinfo->tm_wday will be set */
-	// rawtime=mktime ( timeinfo );
-	rawtime.tv_sec=mktime ( timeinfo );
-	rawtime.tv_usec=0;
-	 settimeofday(&rawtime,NULL);
-	 printf("Set Beagle Time to: %s %d/%d/%d %02d:%02d:%02d\n", weekday[timeinfo->tm_wday],
-			 timeinfo->tm_year+1900, timeinfo->tm_mon+1, timeinfo->tm_mday,
-			 timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	 printf("To set Beagle Time to: %d/%d/%d %02d:%02d:%02d\n",
+			 timeinfo.tm_year+1900, timeinfo.tm_mon+1, timeinfo.tm_mday,
+			 timeinfo.tm_hour, timeinfo.tm_min, timeinfo.tm_sec);
+
+
+    /* call mktime: timeinfo->tm_wday will be set */
+	systime.tv_sec=mktime ( &timeinfo );
+	systime.tv_usec=0;
+	settimeofday(&systime,NULL);
+
+	 /* Time of day is set.  Now, let's get it, and verify that it looks right */
+    printf("Read new time from Beagle (by time()): ");   //Confirmation!!
+	time(&t2);
+	timeinfo_ptr= localtime(&t2);
+	sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo_ptr->tm_year+1900, timeinfo_ptr->tm_mon+1,
+	 	    					timeinfo_ptr->tm_mday,timeinfo_ptr->tm_hour, timeinfo_ptr->tm_min, timeinfo_ptr->tm_sec);
+	cout<<tempStr<<endl;
+
+
+	char * text_time;
+	gettimeofday(&systime, NULL);
+	text_time = ctime(&systime.tv_sec);
+    printf("The system time has been set to %s\n", text_time);
+
+    cout<<"setBeagleRTC2 done"<<endl<<endl;
+}
+
+void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss)
+{
+	    //MMDDhhmmYY.ss
+	    char dTime[26] = "sudo date 012414272013.30";   //24 Jan 2013 14:27:30
+	    int n;
+
+	    sprintf(dTime,"sudo date %02d%02d%02d%02d%04d.%02d",mm,dd,hh,min,yy, ss);
+	    system(dTime);
+
+	    printf("Date and time has been changed to: ");   //Confirmation!!
+        // read system time
+	        char tempStr[500];
+	    	time_t t2;
+
+	    	time(&t2);
+	       	struct tm * timeinfo= localtime(&t2);
+	    	sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+	    					timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	    	cout<<tempStr<<endl<<endl;
 
 }
 

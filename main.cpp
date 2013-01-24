@@ -38,7 +38,7 @@ static const char *PORTPC_NAME = "/dev/ttyO2";  // for default RS232 console at 
 uartBeagle mBed("mBed");
 uartBeagle PC("PC");
 
-#define MAXROW_DATA 20
+#define MAXROW_DATA 500
 #define MAXCOL_DATA 500
 
 int dataUV[MAXROW_DATA][MAXCOL_DATA];
@@ -80,6 +80,7 @@ int moveMotor2Switch();
 int moveMotor2Dest(int dest);
 
 int daqBySWN(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
+int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
 int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 void setBeagleRTC(void);
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
@@ -134,41 +135,34 @@ int main(int argc, char* argv[]) {
 	printf("Press Ctrl+C to exit the program.\n");
 
 	// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
-	printf("setm 1 0 30 100 1\r\n");
-	mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
-	usleep(100);
+	// printf("setm 1 0 30 100 1\r\n");
+	// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
+	// usleep(100);
 
 	// while (mBed.readline()==0){}
 
-	printf("move -d 1 300\r\n");
-	mBed.uartwriteStr("move -d 1 300\r\n");
+	printf("move -s 1 -300\r\n");
+	mBed.uartwriteStr("move -s 1 -300\r\n");
+	usleep(1000);
+	while (mBed.readline()==0){}
+
+	printf("move -s 1 300\r\n");
+	mBed.uartwriteStr("move -s 1 300\r\n");
 	usleep(1000);
 	while (mBed.readline()==0){}
 
 	// setBeagleRTC();
 
-	// mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
 	statemain=MBEDONLY; // 1
 	PC.uartwriteStr("Enter mbed mode by default for controlling mbed manually\r\n");
 	printf("Enter mbed mode by default for controlling mbed manually\r\n");
 
-	PC.uartwriteStr("  Waiting for commands (for command information, please reset mbed\r\n");
-	PC.uartwriteStr("  To switch back to automatic beagle mode, type idle followed by Enter\r\n");
+	PC.uartwriteStr("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
 	printf("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
-    printf("  To switch back to automatic beagle mode, type idle followed by Enter in AccessPort window\r\n");
 
-	PC.uartwriteStr("% move -s 1 300\r\n");
-	mBed.uartwriteStr("move -s 1 300\r\n");
-	usleep(1000);
-	while (mBed.readline()==0){}
-
-	setBeagleRTC();
-	// mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-	statemain=MBEDONLY; // 1
-	printf("Enter mbed mode be default for controlling mbed manually\r\n");
-	PC.uartwriteStr("Enter mbed mode be default for controlling mbed manually\r\n");
-	printf("   to see the mbed command, please reset mbed\r\n");
 	PC.uartwriteStr("   to see the mbed command, please reset mbed\r\n");
+	printf("   to see the mbed command, please reset mbed\r\n");
+
 	printf("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
 	printf("   to stop program, switch to Beagle mode first and then type quit followed by ENTER. Wait for a few seconds\r\n");
 	PC.uartwriteStr("   to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
@@ -197,8 +191,8 @@ while (1)
 		if (elapsed_secs>=10)
 			{
 			t1=t2;
-			// printf("skip DAQ for debuging \r\n");
-			statemain=DAQ;
+			printf("skip %d-th DAQ for debuging \r\n", ++nDAQ);
+			// statemain=DAQ; // to start data acquisition
 			}
 		break;
 		}
@@ -236,9 +230,12 @@ while (1)
 		// move motor for reference measurement
 		// moveMotor2Dest(80);
 		statemain=SWN; //3
+
+		PC.uartwriteStr("disable uvs00 for debug\r\n");
+/*   disable uvs00 for debug
 		mBed.uartwriteStr("uvs00\r\n");
 		PC.uartwriteStr("uvs00\r\n");
-
+*/
 		// fgets(tempbuff, 100, uart_mBed);
 		usleep(100);
 		mBed.readline();
@@ -266,16 +263,25 @@ while (1)
 
 		statemain=SWN;
 		int posA, posB, nSam;
-		posA=91; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
-		int scanSteps=10; // MAXROW_DATA;
-//		if (daqBySWN(posA, scanSteps, nSam, dataIR, dataUV)==-1)
-		if (daqBySWN(posA, scanSteps, 10, dataIR, dataUV)==-1) // for debug
+		// posA=1600; posB=posA+MAXROW_DATA-1; nSam=MAXCOL_DATA;
+		posA=1601; posB=1900; nSam=MAXCOL_DATA;
+		int scanSteps=posB-posA+1;
+
+		int swnOK;
+		// swnOK=daqBySWN(posA, scanSteps, nSam, dataIR, dataUV);
+		swnOK=daqBySWN(posA, scanSteps, 10, dataIR, dataUV); // for debug
+		mBed.uartwriteStr("irt\r\n");
+		PC.uartwriteStr("irt\r\n");
+
+		mBed.uartwriteStr("uvt\r\n");
+		PC.uartwriteStr("uvt\r\n");
+
+		if (swnOK==-1)
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
 			PC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
 			cout<<"============================="<<endl<<endl;
 			PC.uartwriteStr("% =======================\r\n\r\n");
-
 			statemain=IDLE;
 			break; // ignore the data and continue the main loop
 		}
@@ -302,7 +308,7 @@ while (1)
 			  yyUV[i]=yyUV[i]/MAXCOL_DATA;
 			}
 	   for (int i=0; i<MAXROW_DATA;i++)
-		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", xx[i],yyIR[i], yyUV[i]);
+		   printf("xx[%d]-yyIR[%f]-yyUV[%f]\r\n", (int)round(xx[i]),yyIR[i], yyUV[i]);
 
 		// gfit(xx,yyIR,0.2, &sigmaIR, &muIR, &aIR);
 		// gfit(xx,yyUV,0.2, &sigmaUV, &muUV, &aUV);
@@ -326,6 +332,7 @@ while (1)
 	default:
 	{   statemain=IDLE;
 		printf("WARN: case statemain = default. reset statemain=IDLE\r\n");
+		break;
 	}
 
   }  // end of switch (statemain)
@@ -356,6 +363,7 @@ int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL
     string strData;
     // TODO:
     // mBed.readPkt("MOTORxxx","xxxx", strData);
+    return -1;
 }
 
 // int daqBySWN(int a, int b, int nSperS)
@@ -514,6 +522,86 @@ int daqBySWN(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	return 0;
 }
 
+// manually collect data and save data into ref.txt
+int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV)
+{    char tempStr[500];
+	time_t t2;
+	int pre_statemain;
+
+	pre_statemain=statemain;
+
+	struct tm * timeinfo= localtime(&t2);
+	sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+					timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	printf("%s start UV/IR measurements\n",tempStr);
+	PC.uartwriteStr(tempStr);
+	PC.uartwriteStr(" start UV/IR measurements\n");
+	statemain=MOVEMOTOR; //2
+	if (moveMotor2Switch()<=0)
+		{  // moveMotor2Switch failed
+			cout<<"moveMotor2Switch failed. Cancel data collection"<<endl;
+			statemain=pre_statemain;
+			return -1;
+		}
+	mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
+	PC.uartwriteStr("setm 1 0 0 100 1\r\n");
+	usleep(100);
+	mBed.readline();
+
+	statemain=SWN; //3
+
+	if (ampUV<0)
+		sprintf(tempStr,"uvt\r\n");
+	else
+		sprintf(tempStr,"uvs%02d\r\n",ampUV);
+	mBed.uartwriteStr(tempStr);
+	PC.uartwriteStr(tempStr);
+
+	usleep(100);
+	mBed.readline();
+
+	if (ampIR<0)
+			sprintf(tempStr,"irt\r\n");
+	else
+			sprintf(tempStr,"irs%02d\r\n",ampIR);
+
+	mBed.uartwriteStr(tempStr);
+	PC.uartwriteStr(tempStr);
+	usleep(100);
+	mBed.readline();
+
+	mBed.uartwriteStr("apdbv 143v\r\n");
+	PC.uartwriteStr("apdbv 143v\r\n");
+	usleep(100);
+	mBed.readline();
+
+	mBed.flushrxbuf();
+
+		posA=1601; posB=1900; nSam=MAXCOL_DATA;
+		int scanSteps=posB-posA+1;
+		int swnOK;
+		// swnOK=daqBySWN(posA, scanSteps, nSam, dataIR, dataUV);
+		swnOK=daqBySWN(posA, scanSteps, 10, dataIR, dataUV); // for debug
+		mBed.uartwriteStr("irt\r\n");
+		PC.uartwriteStr("irt\r\n");
+
+		mBed.uartwriteStr("uvt\r\n");
+		PC.uartwriteStr("uvt\r\n");
+
+		if (swnOK==-1)
+		{ // something wrong
+			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
+			PC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
+			cout<<"============================="<<endl<<endl;
+			PC.uartwriteStr("% =======================\r\n\r\n");
+
+			statemain=pre_statemain;
+			return -1; // ignore the data and continue the main loop
+		}
+		//manually daqswn is successfull
+		return 0;
+}
+
 // Test Matlab Code Generation
 void testMatabCode()
 {
@@ -567,8 +655,8 @@ void process_UART(int *pstatemain)
 	recvLines_PC=0;
 	if (*pstatemain!=IDLE && *pstatemain!=MBEDONLY)
 		{
-		printf("We only process UART when statemain==IDLE\r\n");
-		PC.uartwriteStr("We only process UART when statemain==IDLE\r\n");
+		printf("We only process UART when statemain==IDLE || MBEDONLY \r\n");
+		PC.uartwriteStr("We only process UART when statemain==IDLE || MBEDONLY \r\n");
 		return;
 		}
 
@@ -578,8 +666,8 @@ void process_UART(int *pstatemain)
 	recvLines_mBed=mBed.readline(); // returns how many lines have been received
 	if (recvLines_mBed > 0)
 	{
-		printf("mBed->BB: %s", mBed.rxbuf);
-		printf("\n"); //mBed may not send \n, manually add \n to stdio
+		// printf("mBed->BB: %s", mBed.rxbuf);
+		// printf("\n"); //mBed may not send \n, manually add \n to stdio
 		mBed.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 	}
 
@@ -632,6 +720,18 @@ void process_UART(int *pstatemain)
 			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
 		}
+
+		if (strncmp(PC.rxbuf, "daqswn\r",5)==0)
+				{  // quit the programme
+				   printf("manually collect data and save to ref.txt at statemain=%d. \r\n",
+									*pstatemain);
+				   PC.uartwriteStr("%manually collect data and save to ref.txt \r\n");
+				   // int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
+				   manual_daqswn(1601, 1900, 10,0,0);
+				   // *pstatemain=DAQ;
+				   return;
+				}
+
 
 		//Otherwise, forward recieved string to console and mBed
 		printf("PC->mBed (line=%d): %s", recvLines_PC, PC.rxbuf);
@@ -741,6 +841,10 @@ cout<<"move motor to switch position"<<endl;
 		}
 
 	}
+
+	// should never reach here
+	return -1;
+
 }
 
 // Executes when the user presses Ctrl+C.

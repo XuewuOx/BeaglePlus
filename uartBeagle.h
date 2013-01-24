@@ -24,7 +24,7 @@
 #include <string.h>
 
 
-#define MAX_COMMAND_LENGTH 10000
+#define MAX_COMMAND_LENGTH 50000
 
 class uartBeagle {
 public:

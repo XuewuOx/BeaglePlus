@@ -314,6 +314,16 @@ int uartBeagle::readline()
 
 	if ((nChar=read(uartID, rxbufptr, rxbuf+bufsize-rxbufptr-1))>0)
 	  {
+
+    	if (strcmp(InstName,"mBed")==0)
+    	{
+    	  if (statemain==MBEDONLY)
+    		PC.uartwriteChar(rxbufptr, nChar);
+          if (statemain==DAQ && strcmp(rxbuf,"% motor[")!=0)
+    		PC.uartwriteChar(rxbufptr, nChar);
+    	}
+    	// cout<<rxbufptr;
+
     	nTotalChar+=nChar;
     	rxbufptr+=nChar;
 		if(rxbufptr[-1]=='\n' || rxbufptr[-1]=='\r')
@@ -327,11 +337,6 @@ int uartBeagle::readline()
 						lineReceived++;
 					}
 				// printf("receiv@readline(): %s",rxbuf);
-				if (strcmp(InstName,"mBed")==0)
-				{
-					if (statemain=DAQ && strcmp(rxbuf,"% motor[")!=0)
-					        PC.uartwriteChar(rxbuf, rxbufptr-rxbuf);
-				}
 
 
 				if (rxbufptr-rxbuf>(int)nTotalChar)
@@ -342,7 +347,7 @@ int uartBeagle::readline()
 				}
 				//cout<<""
 				// cout<<"string ended with \\n or \\r received, lineReceived="<<lineReceived<<endl;
-				cout<<rxbuf<<endl;
+				// cout<<rxbuf<<endl;
 				rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf
 				                // for receiving next command line
 				nTotalChar=0;

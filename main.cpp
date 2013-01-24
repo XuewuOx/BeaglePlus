@@ -81,7 +81,8 @@ int moveMotor2Dest(int dest);
 
 int daqBySWN(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
-int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
+// int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
+int daqUVIR(int Fs, int nSamples, int posMS, char * fname);
 void setBeagleRTC(void);
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
 void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
@@ -342,8 +343,16 @@ while (1)
 		mBed.readline();
 
 		// Collect UV IR data at the optimal position
-		// daqUVIR(Fs, nSample, dataIR, dataUV);
 
+		time_t tnow;
+		char fname[100];
+		time(&tnow);
+		timeinfo= localtime(&tnow);
+    	sprintf(fname,"iruvref_%04d%02d%02d_%02dh%02dm%02ds.txt",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+    			timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    	int Fs=1000;
+    	int nSample=10;
+    	daqUVIR(Fs, nSample, posOptUV,fname);
 		// turn off light sources
 		mBed.uartwriteStr("irt\r\n");
 		// PC.uartwriteStr("irt\r\n");
@@ -380,17 +389,39 @@ while (1)
 }
 
 
-int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA])
+int daqUVIR(int Fs, int nSamples, int posMS, char * fname)
 {
+	char dataStr[MAXCOL_DATA*MAXROW_DATA*5*2];
 	int nChn=0;
-	char tempStr[30];
-	sprintf(tempStr,"a2d s %d %d\r\n", Fs, nSamples);
-    mBed.uartwriteStr(tempStr);
 
-    string strData;
+	char tempStr[30];
+	// sprintf(tempStr,"a2d s %d %d\r\n", Fs, nSamples);
+	sprintf(tempStr,"swn %d %d %d\r\n", posMS, posMS, nSamples);
+    mBed.uartwriteStr(tempStr);
+	string strRx;
+	string strData;
     // TODO:
     // mBed.readPkt("MOTORxxx","xxxx", strData);
-    return -1;
+    // mBed.readPkt("M posA=","DATAIRUVEND",strRx);
+    int nChar=mBed.readPktTimeout("%SWN posA=","DATAIRUVEND",strRx,20000);
+    if (nChar<=0)
+    	{ // nothing valid received from mBed.
+    		cout<<"Nothing valid received from mBed. "<<endl;
+    		return -1; // return an ERROR
+    	}
+    	// valid packet received
+    	// save it to a txt file
+    	FILE *fdata;
+
+    	fdata=fopen(fname,"w"); //Create an empty file
+    	if (fdata==NULL)
+    	  { cout<<"fopen() to creat a data file "<<fname<<" failed."<<endl;
+    		return -1; // return an ERROR
+    	  }
+    	fwrite(strRx.c_str(),1,strRx.length(), fdata);
+    	fclose (fdata);
+    	printf("save data to %s OK\n", fname);
+    return 0;
 }
 
 // int daqBySWN(int a, int b, int nSperS)

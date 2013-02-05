@@ -238,12 +238,12 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 			found2=strRx.find(strTail);
 			// cout<<"found0("<<strHead<<")="<<(int)found0<<", found2("<<strTail<<")="<<(int)found2<<endl;
 			if (found0!=string::npos && found2!=string::npos)
-				{cout <<"first '"<<strHead<<"' found at: "<<int(found0)<<endl;
-				cout <<"first '"<<strTail<< "' found at: "<<int(found2)<<endl;
-				cout << "remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
+				{cout <<"   first '"<<strHead<<"' found at: "<<int(found0)<<endl;
+				cout <<"   first '"<<strTail<< "' found at: "<<int(found2)<<endl;
+				cout << "   remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
 				strRx.erase(found2+strlen(strTail));
 				strRx.erase(0,found0-1);
-				cout <<"Now strRx.length()="<<strRx.length()<<endl;
+				cout <<"   Now strRx.length()="<<strRx.length()<<endl;
 				// strRx.copy(strPkt, 0, strRx.length());
 				// strPkt[strRx.length()]='\0';
 				nChar=strRx.length();
@@ -254,14 +254,15 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 				continue;
 			else if(n_usleeps==0)
 				{ 	nChar=0;
-					break;
+				    cout<<"Timeout: uartBeagle::readPktTimeout() returns failure"<<endl;
+					return nChar;
 				}
 			else
 				n_usleeps--;
 
 		}
 
-		cout<<"uartBeagle::readPktTimeout() returns"<<endl;
+		cout<<"OK uartBeagle::readPktTimeout() returns"<<endl;
 		return nChar;
 }
 

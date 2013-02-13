@@ -18,6 +18,7 @@ using namespace std;
 #include <stdio.h>
 #include <string.h>
 
+#include "main.h"
 #include "uartBeagle.h"
 
  // extern PC;
@@ -148,7 +149,7 @@ int uartBeagle::uartread()
 	int chars_read = read(uartID, rxbuf, bufsize);
 	if (chars_read>=0)
 	{   rxbuf[chars_read]='\0'; // printf("rcv: %s",rxbuf);
-		if (strcmp(InstName,"mBed")==0)
+		 if (strcmp(InstName,"mBed")==0)
 			PC.uartwriteChar(rxbuf,chars_read);
 
 	}
@@ -238,7 +239,9 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 			found2=strRx.find(strTail);
 			// cout<<"found0("<<strHead<<")="<<(int)found0<<", found2("<<strTail<<")="<<(int)found2<<endl;
 			if (found0!=string::npos && found2!=string::npos)
-				{cout <<"   first '"<<strHead<<"' found at: "<<int(found0)<<endl;
+				{
+				// DEBUGF("   first '%s' found at : %d\r\n", strHead, int(found0));
+				cout <<"   first '"<<strHead<<"' found at: "<<int(found0)<<endl;
 				cout <<"   first '"<<strTail<< "' found at: "<<int(found2)<<endl;
 				cout << "   remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
 				strRx.erase(found2+strlen(strTail));
@@ -304,7 +307,26 @@ int uartBeagle::readPkt(char *strHead, char *strTail,string &strRx)
 }
 
 
-// read uart until \r or \n is received
+// read uart and wait twait_ms until at least one line is received
+int uartBeagle::readlineTimeOut(int twait_ms)
+{
+    int mBedReply=0;
+   	do{
+    		usleep(1000);
+    		twait_ms--;
+    		mBedReply=readline();
+   	}while(twait_ms>0 && mBedReply==0);
+    if (mBedReply==0)
+    { // mBedReply does not reply, skip
+   		cout<<"readline() timeout: No reply is received from "<<InstName<<endl;
+   		return -1; // return an ERROR
+    }
+    return mBedReply;
+}
+
+// return the minimum number of line has been received
+// TODO: (Bug): multiple lines may be treated as one line
+//       if the system call read() returns multiple lines
 int uartBeagle::readline()
 {
 	int nChar,i;
@@ -312,21 +334,31 @@ int uartBeagle::readline()
 	char *pChar;
 
 	bufsize=MAX_COMMAND_LENGTH;
-
+	lineReceived=0;
 	if ((nChar=read(uartID, rxbufptr, rxbuf+bufsize-rxbufptr-1))>0)
 	  {
 
     	if (strcmp(InstName,"mBed")==0)
     	{
-    	  if (statemain==MBEDONLY)
+    	  if (statemain==MBEDONLY || statemain==SWN)
     		PC.uartwriteChar(rxbufptr, nChar);
-          if (statemain==DAQ && strcmp(rxbuf,"% motor[")!=0)
-    		PC.uartwriteChar(rxbufptr, nChar);
+           if (statemain==DAQ && strcmp(rxbuf,"% motor[")!=0)
+    	  	PC.uartwriteChar(rxbufptr, nChar);
     	}
     	// cout<<rxbufptr;
 
     	nTotalChar+=nChar;
     	rxbufptr+=nChar;
+    	if (nTotalChar>=MAX_COMMAND_LENGTH)
+    	{
+    		cout<<"%d chars (> MAX_COMMAND_LENGTH %d) have been received without \\r \\n. "<<endl;
+			rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf
+			                // for receiving next command line
+			nTotalChar=0;
+		    DEBUGF("%s",rxbuf);
+	 	    return 0;
+    	}
+
 		if(rxbufptr[-1]=='\n' || rxbufptr[-1]=='\r')
 		{
 			/* null terminate the string*/
@@ -352,7 +384,7 @@ int uartBeagle::readline()
 				rxbufptr=rxbuf; // reset the pointer to the beginning of rxbuf
 				                // for receiving next command line
 				nTotalChar=0;
-
+			DEBUGF("%s",rxbuf);
 		 	return lineReceived;
 		}
 	  }

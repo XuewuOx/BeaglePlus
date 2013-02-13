@@ -62,6 +62,7 @@ public:
 
 	void flushrxbuf(); // flush rxbuf and reset rxbufptr to rxbuf
 	int readline(); // read uart until \r or \n is received
+	int readlineTimeOut(int twait_ms);
 // 	int readlineOnce();
 
 };

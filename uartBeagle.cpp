@@ -240,13 +240,12 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 			// cout<<"found0("<<strHead<<")="<<(int)found0<<", found2("<<strTail<<")="<<(int)found2<<endl;
 			if (found0!=string::npos && found2!=string::npos)
 				{
-				// DEBUGF("   first '%s' found at : %d\r\n", strHead, int(found0));
-				cout <<"   first '"<<strHead<<"' found at: "<<int(found0)<<endl;
-				cout <<"   first '"<<strTail<< "' found at: "<<int(found2)<<endl;
-				cout << "   remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
+				DEBUGF("   first '%s' found at : %d\r\n", strHead, int(found0));
+				DEBUGF("   first '%s' found at : %d\r\n", strTail, int(found2));
+				DEBUGF("   remove chars before %d and after %d \r\n", int(found0), int(found2));
 				strRx.erase(found2+strlen(strTail));
 				strRx.erase(0,found0-1);
-				cout <<"   Now strRx.length()="<<strRx.length()<<endl;
+				DEBUGF("   Now strRx.length()=%d",strRx.length());
 				// strRx.copy(strPkt, 0, strRx.length());
 				// strPkt[strRx.length()]='\0';
 				nChar=strRx.length();
@@ -264,8 +263,7 @@ int uartBeagle::readPktTimeout(char *strHead, char *strTail,string &strRx, doubl
 				n_usleeps--;
 
 		}
-
-		cout<<"OK uartBeagle::readPktTimeout() returns"<<endl;
+		DEBUGF("    OK! readPktTimeout() returns successfully\r\n");
 		return nChar;
 }
 
@@ -289,12 +287,13 @@ int uartBeagle::readPkt(char *strHead, char *strTail,string &strRx)
 		found2=strRx.find(strTail);
 		// cout<<"found0("<<strHead<<")="<<(int)found0<<", found2("<<strTail<<")="<<(int)found2<<endl;
 		if (found0!=string::npos && found2!=string::npos)
-		{	cout <<"first '"<<strHead<<"' found at: "<<int(found0)<<endl;
-			cout <<"first '"<<strTail<< "' found at: "<<int(found2)<<endl;
-			cout << "remove chars before "<<int(found0)<<"and after"<<int(found2)<<endl;
+		{
+			DEBUGF("   first '%s' found at : %d\r\n", strHead, int(found0));
+			DEBUGF("   first '%s' found at : %d\r\n", strTail, int(found2));
+			DEBUGF("   remove chars before %d and after %d \r\n", int(found0), int(found2));
 			strRx.erase(found2+strlen(strTail));
 			strRx.erase(0,found0-1);
-			cout <<"Now strRx.length()="<<strRx.length()<<endl;
+			DEBUGF("   Now strRx.length()=%d",strRx.length());
 			// strRx.copy(strPkt, 0, strRx.length());
 			// strPkt[strRx.length()]='\0';
 			break;
@@ -302,7 +301,7 @@ int uartBeagle::readPkt(char *strHead, char *strTail,string &strRx)
 		}
 		usleep(1000);
 	}
-	cout<<"uartBeagle::readPkt() is returning"<<endl;
+	DEBUGF("uartBeagle::readPkt() returns");
 	return strRx.length();
 }
 

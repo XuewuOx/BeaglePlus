@@ -26,6 +26,7 @@ using namespace std;
 // #include "gfit.h"
 #include "test.h"
 #include "gfit_rdfile.h"
+#include "meanfile.h"
 
 #include "main.h"
 
@@ -84,7 +85,7 @@ int moveMotor2Dest(int dest);
 
 int scanIRUV(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA],char *fleadname);
 int daqIRUV(int Fs, int nSamples, int posMS, char * fname);
-int scanProcData(char* fname, int* optIR, int* optUV);
+int procScanData(char* fname, int* optIR, int* optUV);
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
 // int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
@@ -160,7 +161,7 @@ int main(int argc, char* argv[]) {
 	mBed.uartwriteStr("move -s 1 -300\r\n");
 	usleep(1000);
 	// while (mBed.readline()==0){}
-	if (mBed.readlineTimeOut(10000)==-1)
+	if (mBed.readlineTimeOut(100000)==-1)
 		{
 		cout<<"Failed to communicate with mBed to move motor\r\n";
 		return -1;
@@ -542,7 +543,7 @@ int scanIRUV(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], i
 	return -1;  // must never reach here
 }
 
-int scanProcData(char* fname, int* optIR, int* optUV)
+int procScanData(char* fname, int* optIR, int* optUV)
 {
 	// Gaussian fitting to find the peak location
 	  char temStr[200];
@@ -550,10 +551,11 @@ int scanProcData(char* fname, int* optIR, int* optUV)
 	  fsize[0]=1; fsize[1]=strlen(fname);
 		double gfIR[3], gfUV[3];
 
-	  // gfit_rdfile(fname, fsize, gfIR, gfUV); // commented for debug
-		 if (gfIR[2]==-1)
+	  gfit_rdfile(fname, fsize, gfIR, gfUV); // commented for debug
+
+		 if (round(gfIR[2])==-1)
 		 {
-			 printf("  opening file %s failed.returned value =%d \n",fname,gfIR[2]);
+			 printf("  opening file %s failed.returned value =%2f \n",fname,gfIR[2]);
 		     sprintf(temStr,"\r\nreading file '%s' failed. Returned value =%d\r\n",
 									fname,gfIR[2]);
 			 // PC.uartwriteStr(temStr);
@@ -561,34 +563,51 @@ int scanProcData(char* fname, int* optIR, int* optUV)
 		 }
 		 if (gfIR[2]<=-2)
 		 {
-			printf("  Gaussian fitting at %s failed. returned value =%d\n",fname,gfIR[2]);
+			printf("  Gaussian fitting at %s failed. returned value =%2f\n",fname,gfIR[2]);
 			sprintf(temStr,"\r\nGaussian fitting at '%s' failed. Returned value =%d\r\n",
 												fname,gfIR[2]);
+			 // PC.uartwriteStr(temStr);
 			return -1;
 		 }
-
-
-	 printf("Gaussian fitting at '%s' successes and the optIR=%d, optUV=%d\n",fname,gfIR[0], gfUV[0]);
+	  int msPkIR, msPkUV;
+      msPkIR=round(gfIR[0]); msPkUV=round(gfUV[0]);
+      printf("Gaussian fitting at '%s' successes and the optIR=%d, optUV=%d\n",fname,msPkIR, msPkUV);
 
 	// sprintf(temStr,"\r\nreading %s successes and the opt step =%d\r\n",fname,optstep);
 	// PC.uartwriteStr(temStr);
-	 *optIR=gfIR[0];
-	 *optUV=gfUV[0];
+	 *optIR=msPkIR; // gfIR[0];
+	 *optUV=msPkUV; //gfUV[0];
 	 return 1;
+}
+
+int procDaqData(char* fname, double* muIR, double* muUV)
+{
+	   double EIR[2], EUV[2];
+        int fsize[2];
+        EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
+        fsize[0]=1; fsize[1]=strlen(fname);
+        meanfile(fname, fsize, EIR, EUV);
+        printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
+            		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
+        *muIR=EIR[0];
+        *muUV=EUV[0];
+        return 1;
 }
 
 // manually collect data and save data into ref.txt
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas)
 {    char tempStr[500];
 	char fnamescan[20];
-	char fnamemeas[20];
+	char fnameIR[20];
+	char fnameUV[20];
 	time_t t2;
 	int pre_statemain;
 
 	pre_statemain=statemain;
 
 	sprintf(fnamescan, "%sscan", fleadname);
-	sprintf(fnamemeas, "%smeas", fleadname);
+	sprintf(fnameIR, "%sir", fleadname);
+	sprintf(fnameUV, "%suv", fleadname);
 
 	struct tm * timeinfo= localtime(&t2);
 	sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
@@ -653,36 +672,59 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 		int optIR, optUV;
 		int gfitOK;
 		sprintf(tempStr,"%s.txt", fnamescan);
-		// gfitOK=scanProcData(tempStr, &optIR, &optUV);
-		gfitOK=1779; // for debug only
+		gfitOK=procScanData(tempStr, &optIR, &optUV);
+
         if (gfitOK==-1)
-        {   cout<<"WARN: scanProcData() for Gaussian fitting returns WRONG result. Continue main loop."<<endl;
+        {   cout<<"WARN: procScanData() for Gaussian fitting returns WRONG result. Continue main loop."<<endl;
     	goto Label_ReturnFailure;
         }
 
+		// Collect UV IR data at the optimal position
+        // measure IR first
 
+        int daqOK;
+        int Fs, nSample;
+        Fs=500;
+		nSample=nSmeas;//10*nSam;
 
-		sprintf(tempStr,"move -d 1 %d\r\n",optUV);
+        sprintf(tempStr,"move -d 1 %d\r\n",optIR);
 		mBed.uartwriteStr(tempStr);
 		// PC.uartwriteStr(tempStr);
 		printf(tempStr);
 		usleep(10000);
-		mBed.readlineTimeOut(20000); // wait until motor arrives at optimal position
+		mBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
 		usleep(500000);
-		// Collect UV IR data at the optimal position
-
-		int daqOK;
-		int Fs, nSample;
-		Fs=500;
-    	nSample=nSmeas;//10*nSam;
-    	daqOK=daqIRUV(Fs, nSample, optUV,fnamemeas);
+    	daqOK=daqIRUV(Fs, nSample, optIR,fnameIR);
         if(daqOK==-1)
         {
-        	cout<<"WARN: daqIRUV() fails. Continue main loop."<<endl;
+        	cout<<"WARN: daqIRUV() for IR ("<<fnameIR<<".txt) fails. Continue main loop."<<endl;
         	goto Label_ReturnFailure;
         }
-		// Process data in refmeas.txt
-        printf("daqIRUV() successed. meanIR=, meanUV=\r\n");
+        // TODO: call matlab function calculate mean EIR
+        double muIR, muUV;
+		sprintf(tempStr,"%s.txt", fnameIR);
+		procDaqData(tempStr,&muIR, &muUV);
+        printf("daqIRUV() for Ir at MS=%d successes (%s.txt). meanIr=%f\r\n", optIR, fnameIR,muIR);
+
+
+        // measure UV second
+        sprintf(tempStr,"move -d 1 %d\r\n",optUV);
+        mBed.uartwriteStr(tempStr);
+        // PC.uartwriteStr(tempStr);
+       	printf(tempStr);
+   		usleep(10000);
+   		mBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
+   		usleep(500000);
+        daqOK=daqIRUV(Fs, nSample, optUV,fnameUV);
+        if(daqOK==-1)
+        {
+                	cout<<"WARN: daqIRUV() for UV ("<<fnameUV<<".txt) fails. Continue main loop."<<endl;
+                	goto Label_ReturnFailure;
+        }
+        // TODO: call matlab function calculate mean EUV
+		sprintf(tempStr,"%s.txt", fnameUV);
+		procDaqData(tempStr,&muIR, &muUV);
+        printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", optUV, fnameUV, muUV);
 
 
 
@@ -691,7 +733,7 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
         mBed.uartwriteStr("irt\r\n");
         printf("irt\r\n"); // PC.uartwriteStr("\% irt\r\n");
-        cout<<"Both scan and daq are OK. turn off lights, \r\n   irt\r\n  irs\r\n";
+        cout<<"SUCCESS: Both scan and daq are OK. turn off lights. \r\n";
         statemain=pre_statemain;
         return 0;
 
@@ -702,7 +744,7 @@ Label_ReturnFailure:
 		mBed.uartwriteStr("uvt\r\n");
 		printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
 
-	    cout<<"FAILED: turn off lights, \r\n   irt\r\n  irs\r\n";
+	    cout<<"FAILED: turn off lights.\r\n";
 		statemain=pre_statemain;
 		return -1; // ignore the data and continue the main loop
 }
@@ -738,12 +780,13 @@ void testMatabCode()
 
 	// test codes for gfit_rdfile
 	// char *fname="wtrscan.txt";
-	  char *fname="refscan_20130205_16h42m02s.txt";
+	//  char *fname="refscan_20130205_16h42m02s.txt";
+	char *fname="Large_refscan.txt";
 	//  char *fname="refscan.txt";
 	  int fsize[2];
 	  fsize[0]=1; fsize[1]=strlen(fname);
 	  double gfIR[3], gfUV[3];
-      gfIR[0]=-3; gfIR[1]=-3;; gfIR[2]=-3;
+      gfIR[0]=-3; gfIR[1]=-3; gfIR[2]=-3;
       gfUV[0]=-4; gfUV[1]=-4; gfUV[2]=-4;
 
       // gfIR[0]=gfit_rdfile(fname, fsize); // gfit_SingleGfit_OK, .\work_readfile\readfile_v4.m
@@ -753,13 +796,24 @@ void testMatabCode()
 	 printf("gfUV=[%f, %f, %f]\r\n", gfUV[0],gfUV[1],gfUV[2]);
 	 if (gfIR[2]<0 && gfUV[2]<0)
 	 {
-		printf("  reading %s or the Gaussian fitting failed.returned value =%f\n",fname,gfIR[0]);
+		printf("  reading \"%s\" or the Gaussian fitting failed.returned value =%f\n",fname,gfIR[0]);
 		return;
 	 }
      int pkIR, pkUV;
 
      pkIR=round(gfIR[0]); pkUV=round(gfUV[0]);
-     printf("  Gaussian fitting at %s successes. optIR=%d, optUV=%d\n",fname,pkIR, pkUV);
+     printf("  Gaussian fitting at \"%s\" successes. optIR=%d, optUV=%d\n",fname,pkIR, pkUV);
+
+
+ 	char *fnameIR="refir.txt";
+	  fsize[0]=1; fsize[1]=strlen(fnameIR);
+	  double dIR[2], dUV[2];
+    dIR[0]=-3; dIR[1]=-3;
+    dUV[0]=-4; dUV[1]=-4;
+
+    meanfile(fname, fsize, dIR, dUV);
+    printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
+    		fnameIR, dIR[0], dIR[1], dUV[0], dUV[1]);
 
 }
 // process UART strings
@@ -1152,7 +1206,6 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss)
 {
 	    //MMDDhhmmYY.ss
 	    char dTime[26] = "sudo date 012414272013.30";   //24 Jan 2013 14:27:30
-	    int n;
 
 	    sprintf(dTime,"sudo date %02d%02d%02d%02d%04d.%02d",mm,dd,hh,min,yy, ss);
 	    system(dTime);

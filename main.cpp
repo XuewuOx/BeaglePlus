@@ -21,23 +21,23 @@ using namespace std;
 #include <time.h>
 // #include <ctime.h>
 
-#include "uartBeagle.h"
-// #include "getRand.h"
-// #include "gfit.h"
-#include "test.h"
-#include "gfit_rdfile.h"
-#include "meanfile.h"
-
 #include "main.h"
 
+#include "uartBeagle.h"
+#include "LoadmonDriver.h"
+#include "sigProcess.h"
+// #include "test.h"
 
 // Change the PORT_NAME for proparait  serial port
 // static const char *PORT_NAME = "/dev/ttyUSB0"; // for AirLink USB-232 converter
 static const char *PORTMBED_NAME0 = "/dev/ttyACM0"; // for mBed USB-232
 // static const char *PORTMBED_NAME1 = "/dev/ttyACM1"; // for mBed USB-232
 static const char *PORTPC_NAME = "/dev/ttyO2";  // for default RS232 console at BB
-uartBeagle mBed("mBed");
-uartBeagle PC("PC");
+// uartBeagle mBed("mBed");
+// uartBeagle PC("PC");
+
+LoadmonDriver daqModule;
+
 
 #define MAXROW_DATA 500
 #define MAXCOL_DATA 500
@@ -61,18 +61,11 @@ enum MAINSTATUS{
 	MBEDONLY =5
 };
 
+
 int statemain;
 
-struct MOTORSTATUS{
-	int nOrigin;
-	int nNow;
-	double motorSpd; //steps/s,
-	int fullStep;
-	int statusLEDMotor;
-	int uSW;
-};
 
-MOTORSTATUS motorLED;
+
 
 
 // void process_UART();
@@ -106,6 +99,8 @@ int main(int argc, char* argv[]) {
     char tempStr[500];
 
     cout << "\n!!!Hello World!!!" << endl; // prints !!!Hello World!!!
+    // cout<<"testfunc()="<<testfunc(5)<<endl;
+
     cout <<argv[0];
     if (argc<=1)
     	{ pNamemBed=(char*)PORTMBED_NAME0; cout<<endl;}
@@ -116,6 +111,7 @@ int main(int argc, char* argv[]) {
     int n;
     int returnstate; // a variable returned by a function
 
+
     // string tempStr2("dir%d=[%d %d %d %d %d ]");
 
     // string strTest("dir02=[0001 0002 0003 0004 0005 ]");
@@ -125,15 +121,13 @@ int main(int argc, char* argv[]) {
 
     // Initialise global variables, display time, open UART ports, etc.
     statemain=INIT; // 0;
-    init_main(pNamemBed);
+    daqModule.initDriver(pNamemBed,(char *)PORTPC_NAME);
+    daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
 
-    PC.uartwriteStr("Beagle starts...\r\n");
-	setBeagleRTC();
-
+    setBeagleRTC();
     printf(" Testing file reading & Gaussian fitting\r\n");
 	// Test Matlab Code Generation
 	testMatabCode();
-
 
 	usleep(1000);
     // PC.uartwriteStr("PC.uartwriteStr() success\n");
@@ -149,50 +143,50 @@ int main(int argc, char* argv[]) {
 	printf("Press Ctrl+C to exit the program.\n");
 
 
-	PC.uartwriteStr("  Testing the motor ...");
+	daqModule.oPC.uartwriteStr("  Testing the motor ...");
 	// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 	// printf("setm 1 0 30 100 1\r\n");
 	// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
 	// usleep(100);
 
 	// while (mBed.readline()==0){}
-	mBed.flushrxbuf();
-	printf("move -s 1 -100\r\n");
-	mBed.uartwriteStr("move -s 1 -300\r\n");
+	daqModule.omBed.flushrxbuf();
+	printf("move -s 1 100\r\n");
+	daqModule.omBed.uartwriteStr("move -s 1 100\r\n");
 	usleep(1000);
 	// while (mBed.readline()==0){}
-	if (mBed.readlineTimeOut(100000)==-1)
+	if (daqModule.omBed.readlineTimeOut(100000)==-1)
 		{
 		cout<<"Failed to communicate with mBed to move motor\r\n";
 		return -1;
 		}
 
-	PC.uartwriteStr(" ... ");
-	printf("move -s 1 100\r\n");
-	mBed.uartwriteStr("move -s 1 300\r\n");
+	daqModule.oPC.uartwriteStr(" ... ");
+	printf("move -s 1 -100\r\n");
+	daqModule.omBed.uartwriteStr("move -s 1 -100\r\n");
 	usleep(1000);
-	while (mBed.readline()==0){}
+	while (daqModule.omBed.readline()==0){}
 
-	PC.uartwriteStr(" OK\r\n");
+	daqModule.oPC.uartwriteStr(" OK\r\n");
 
 
 
 
 
 	statemain=MBEDONLY; // 1
-	PC.uartwriteStr("\r\n  Enter mbed mode by default for controlling mbed manually\r\n");
+	daqModule.oPC.uartwriteStr("\r\n  Enter mbed mode by default for controlling mbed manually\r\n");
 	printf("Enter mbed mode by default for controlling mbed manually\r\n");
 
-	PC.uartwriteStr("  Waiting for commands from USB/RS232 accessport\r\n");
+	daqModule.oPC.uartwriteStr("  Waiting for commands from USB/RS232 accessport\r\n");
 	printf("  Waiting for commands from USB/RS232 accessport (for command information, please reset mbed\r\n");
 
-	PC.uartwriteStr("      to see the mbed command, please reset mbed\r\n");
+	daqModule.oPC.uartwriteStr("      to see the mbed command, please reset mbed\r\n");
 	printf("      to see the mbed command, please reset mbed\r\n");
 
 	printf("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
 	printf("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
-	PC.uartwriteStr("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
-	PC.uartwriteStr("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
+	daqModule.oPC.uartwriteStr("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
+	daqModule.oPC.uartwriteStr("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
 
 	// The main program loop:
 	time_t t1, t2;
@@ -200,6 +194,8 @@ int main(int argc, char* argv[]) {
 	t1-=60; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
 printf("main loop starts\r\n");
+daqModule.oPC.uartwriteStr(" Main loop starts \r\n");
+
 while (1)
 {
 	switch (statemain) {
@@ -236,9 +232,9 @@ while (1)
 
 		sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-		PC.uartwriteStr(tempStr);
+		daqModule.oPC.uartwriteStr(tempStr);
 		sprintf(tempStr,"start %d-th UV/IR measurement\n",nDAQ);
-		PC.uartwriteStr(tempStr);
+		daqModule.oPC.uartwriteStr(tempStr);
 
 		manual_scandaq(100, 300,10,25,00,"wtr", 10000);
 
@@ -297,304 +293,15 @@ while (1)
 
 
     cout<<"=== EXCEPTION main loop exit! ==="<<endl;
-    PC.uartwriteStr("EXCEPTION main loop exit\r\n");
+    daqModule.oPC.uartwriteStr("EXCEPTION main loop exit\r\n");
     usleep(1000);
 	sigint_handler(15);
     return 0;
 }
 
 
-int daqIRUV(int Fs, int nSamples, int posMS, char * fleadnamemeas)
-{
-	char dataStr[MAXCOL_DATA*MAXROW_DATA*5*2];
-	int nChn=0;
-	char fname[100];
-	char tempStr[30];
-    int twait=0;
-    int mBedReply=0;
 
-	// set mBed's sampling rate to 500
-		sprintf(tempStr,"a2d s %d %d\r\n", Fs, 0);
-	    mBed.uartwriteStr(tempStr);
-		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
-		ttimeout=nSamples*(1000*1/Fs+2)+10*2000+20000; // assume Fs Hz sampling rate
-		                                        // motor spd: 100 steps per second
-		                                        // maximum 2000 steps
-		printf("a2d s %d %d  to set mBed's sampling rate to %d\r\n", Fs, 0, Fs);
-		usleep(10000);
-		mBedReply=mBed.readlineTimeOut(2000);
-
-	sprintf(tempStr,"swn %d %d %d\r\n", posMS, posMS, nSamples);
-    mBed.uartwriteStr(tempStr);
-    cout<<"send 'swn "<< posMS <<" "<< posMS <<" "<< nSamples<< "' down to mBed"<<endl;
-	string strRx;
-	string strData;
-    // TODO:
-    // mBed.readPkt("MOTORxxx","xxxx", strData);
-    // mBed.readPkt("M posA=","DATAIRUVEND",strRx);
-    int nChar=mBed.readPktTimeout("%SWN posA=","DATAIRUVEND",strRx,ttimeout);
-    if (nChar<=0)
-    	{ // nothing valid received from mBed.
-    		cout<<"Nothing valid received from mBed. "<<endl;
-    		return -1; // return an ERROR
-    	}
-    	// valid packet received
-    	// save it to a txt file
-    	FILE *fdata;
-    	sprintf(fname, "%s.txt", fleadnamemeas);
-    	fdata=fopen(fname,"w"); //Create an empty file
-    	if (fdata==NULL)
-    	  { cout<<"fopen() to create a data file "<<fname<<" failed."<<endl;
-    		return -1; // return an ERROR
-    	  }
-    	fwrite(strRx.c_str(),1,strRx.length(), fdata);
-    	fclose (fdata);
-    	printf("save data to %s OK\n", fname);
-
-    	// backup file
-    	time_t tnow;
-		struct tm * timeinfo;
-    	char fname2[100];
-    	char cmdline[150];
-    	time(&tnow);
-    	timeinfo= localtime(&tnow);
-    	sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamemeas,timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-    	    	    			timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-    	sprintf(cmdline,"cp %s %s",fname, fname2);
-    	system(cmdline);
-    	printf("backup data in %s to %s OK\n", fname, fname2);
-
-    return 0;
-}
-
-// int scanIRUV(int a, int b, int nSperS)
-// return value:
-//     -1  invalid data acquisition. dataIR and dataUV must be ignored
-//      0   valid data acquisition. nDataSteps_a2b rows, nSperS column data has been collected
-int scanIRUV(int a, int nDataSteps_a2b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA], char *fleadnamescan)
-{
-	int i,j, nChar;
-	char fname[100];
-	char fname2[100];
-
-	char temStr[100];
-
-
-	string strRx;
-	time_t tnow;
-
-	// set mBed's sampling rate to 500
-	sprintf(temStr,"a2d s %d %d\r\n", FS_SCAN, 0);
-    mBed.uartwriteStr(temStr);
-	uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
-	ttimeout=nSperS*abs(nDataSteps_a2b)*(2*1000*1/FS_SCAN+1)+10*3000+40000; // assume Fs Hz sampling rate
-											// 50 ms for sending each data via UART
-	                                        // motor spd: 100 steps per second
-	                                        // maximum 3000 steps
-	// ttimeout=120000;
-	printf("a2d s %d %d  to set mBed's sampling rate to %d\r\n", FS_SCAN, 0, FS_SCAN);
-	usleep(10000);
-	mBed.readlineTimeOut(2000); //ms
-
-
-	sprintf(temStr,"swn %d %d %d\r\n",a,a+nDataSteps_a2b-1,nSperS);
-	mBed.flushrxbuf();
-	mBed.uartwriteStr(temStr);
-	cout<<"send 'swn "<< a <<" "<< a+nDataSteps_a2b-1 <<" "<< nSperS<< "' down to mBed"<<endl;
-	cout<<"==================================="<<endl;
-	size_t found0, found2;
-
-
-	// mBed.readPkt("M posA=","DATAIRUVEND",strRx);
-	nChar=mBed.readPktTimeout("%SWN posA=","DATAIRUVEND",strRx,ttimeout);
-	if (nChar<=0)
-	{ // nothing valid received from mBed.
-		cout<<"Nothing valid received from mBed. "<<endl;
-
-		return -1; // return an ERROR
-	}
-	// valid packet received
-	// save it to a txt file
-	FILE *fdata;
-	time(&tnow);
-	struct tm * timeinfo= localtime(&tnow);
-
-
-	sprintf(fname,"%s.txt",fleadnamescan);
-	fdata=fopen(fname,"w"); //Create an empty file
-	if (fdata==NULL)
-	  { cout<<"fopen() to creat a data file "<<fname<<" failed."<<endl;
-		return -1; // return an ERROR
-	  }
-	fwrite(strRx.c_str(),1,strRx.length(), fdata);
-	fclose (fdata);
-	printf("save data to %s OK\n", fname);
-
-    // backup the data file
-	sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamescan, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	sprintf(temStr, "cp %s %s", fname, fname2);
-	system(temStr);
-/*
-	fdata=fopen(fname2,"w"); //Create an empty file
-	if (fdata==NULL)
-	  { cout<<"fopen() failed to create a data file ref.txt."<<endl;
-		return -1; // return an ERROR
-		  }
-	fwrite(strRx.c_str(),1,strRx.length(), fdata);
-	fclose (fdata);
-*/
-	printf("backup data in '%s' to '%s' OK\n", fname, fname2);
-	return nChar;
-
-//==================================================================================
-	// The following codes convert the received string into arrays dataIR and dataUV
-	// then pass dataIR and dataUV to a Matlab generated function for Guassian fitting
-	// Note: now we save string to *.txt file and have the Matlab function load data from
-	//       *.txt file, rather than directly send data arrays.
-/*
-* 	char dataStr[MAXCOL_DATA*MAXROW_DATA*5*2];
-* 	dataStr=strRx.c_str();
-*	cout<<"========================================"<<endl;
-*	cout<<"After packet check, strRx.length()="<<strRx.length()<<" chars, strRx="<<endl;
-*	cout<<strRx<<endl;
-*	cout<<"========================================"<<endl;
-*
-*	printf("\r\n----------------------------------------\r\n");
-*	printf("printf full data packet found: %s",dataStr);
-*
-*	int posA, nSteps, nSam, nFs, nArg;
-*	// char charLE="\r\n";
-*	string firstLine;
-*	size_t posLE;
-*	firstLine=strRx.substr(1,(int)(strRx.find("\r\n")));
-*	strRx.erase(0,(int)(strRx.find("\r\n"))+1);
-*	// cout<< "first line: "<<firstLine<<endl;
-*	printf("desired values: posA=%d, nSteps=%d, nSam=%d\r\n",a,nDataSteps_a2b,nSperS);
-*	nArg=sscanf(firstLine.c_str(),"M posA=%d, nSteps=%d, nSam=%d, Fs=%d",&posA,&nSteps, &nSam, &nFs);
-*	printf("decaped values: posA=%d, nSteps=%d, nSam=%d\r\n",posA,nSteps,nSam);
-*	if(nArg!=4 || posA!=a || nSteps!=nDataSteps_a2b || nSam!=nSperS )
-*		{ printf("ERROR: wrong M posA=%d, nSteps=%d  nSam=%d from mBed\r\n", posA, nSteps, nSam);
-*		  return -1; // return an ERROR
-*		  // continue; // continue the main loop
-*		}
-*
-*	// convert ASCII packet into int array
-*	char leadStrIR[10], leadStrUV[10];
-*	char *pStart, *pEnd;
-*	size_t pNextLine;
-*	int nDataChar;
-*
-*	for (i=0;i<nSteps;i++)
-*		for (j=0; j<nSam; j++)
-*			{ dataIR[i][j]=0xFFFF; dataUV[i][j]=0xFFFF;}
-*
-*	for (i=0;i<nSteps;i++)
-*	{   sprintf(leadStrIR,"dir%03d=[ \0",i); //'\0' to terminate the string
-*		found0=strRx.find(leadStrIR);
-*		found2=strRx.find("\r\n");
-*		nDataChar=found2-(found0+strlen(leadStrIR))-1;
-*	    int lencpy=strRx.copy(dataStr,nDataChar,found0+strlen(leadStrIR));
-*	    dataStr[lencpy]='\0'; // terminate the string
-*		strRx.erase(0,found2+1); // remove one line
-*		// cout<< "dataStr contains: "<<dataStr<<" OK "<<endl;
-*	    //  printf("%d-th line IR: %s\r\n", i, dataStr);
-*	    // printf("dataIR[%d][]=",i);
-*	    pEnd=dataStr;
-*	    for (int j=0;j<nSam;j++)
-*		 	{ dataIR[i][j]=strtol(pEnd, &pEnd,10);
-*		 	  // printf(" %d",dataIR[i][j]);
-*		 	}
-*	    // printf("\r\n");
-*
-*
-*	    sprintf(leadStrUV,"duv%03d=[ \0",i);
-*		found0=strRx.find(leadStrUV);
-*		found2=strRx.find("\r\n");
-*		nDataChar=found2-(found0+strlen(leadStrIR))-1;
-*		// cout<<"found0="<<found0<<", found2="<< found2<<" nDataChar="<<nDataChar<<endl;
-*		// TODO: check if nDataChar == nSam*(4+1)+2
-*		// nDataChar=nSam*(4+1)+2; // how many chars in one data line
-*		strRx.copy(dataStr,nDataChar,(int)found0+strlen(leadStrUV));
-*	    dataStr[nDataChar]='\0'; // terminate the string
-*		strRx.erase(0,found2+1); // remove one line
-*		// printf("dataUV[%d][]=",i);
-*	    pEnd=dataStr;
-*		for (int j=0;j<nSam;j++)
-*			dataUV[i][j]=strtol(pEnd, &pEnd,10);
-*
-*	 }
-*	// printf the dataIR and dataUV int array
-*	printf("dataIR and dataUV are:\r\n");
-*	for (int i=0;i<nSteps;i++)
-*		{  int j;
-*		   printf("IR03%d=[",i);
-*		   for (j=0; j<nSam;j++)
-*			   printf(" %04d",dataIR[i][j]);
-*		   printf("]\r\n");
-*
-*		   printf("UV03%d=[",i);
-*		   for (j=0; j<nSam;j++)
-*		  	   printf(" %04d",dataUV[i][j]);
-*		   printf("]\r\n");
-*		}
-*/
-//==================================================================================
-	return -1;  // must never reach here
-}
-
-int procScanData(char* fname, int* optIR, int* optUV)
-{
-	// Gaussian fitting to find the peak location
-	  char temStr[200];
-	  int fsize[2];
-	  fsize[0]=1; fsize[1]=strlen(fname);
-		double gfIR[3], gfUV[3];
-
-	  gfit_rdfile(fname, fsize, gfIR, gfUV); // commented for debug
-
-		 if (round(gfIR[2])==-1)
-		 {
-			 printf("  opening file %s failed.returned value =%2f \n",fname,gfIR[2]);
-		     sprintf(temStr,"\r\nreading file '%s' failed. Returned value =%d\r\n",
-									fname,gfIR[2]);
-			 // PC.uartwriteStr(temStr);
-			 return -1;
-		 }
-		 if (gfIR[2]<=-2)
-		 {
-			printf("  Gaussian fitting at %s failed. returned value =%2f\n",fname,gfIR[2]);
-			sprintf(temStr,"\r\nGaussian fitting at '%s' failed. Returned value =%d\r\n",
-												fname,gfIR[2]);
-			 // PC.uartwriteStr(temStr);
-			return -1;
-		 }
-	  int msPkIR, msPkUV;
-      msPkIR=round(gfIR[0]); msPkUV=round(gfUV[0]);
-      printf("Gaussian fitting at '%s' successes and the optIR=%d, optUV=%d\n",fname,msPkIR, msPkUV);
-
-	// sprintf(temStr,"\r\nreading %s successes and the opt step =%d\r\n",fname,optstep);
-	// PC.uartwriteStr(temStr);
-	 *optIR=msPkIR; // gfIR[0];
-	 *optUV=msPkUV; //gfUV[0];
-	 return 1;
-}
-
-int procDaqData(char* fname, double* muIR, double* muUV)
-{
-	   double EIR[2], EUV[2];
-        int fsize[2];
-        EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
-        fsize[0]=1; fsize[1]=strlen(fname);
-        meanfile(fname, fsize, EIR, EUV);
-        printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
-            		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
-        *muIR=EIR[0];
-        *muUV=EUV[0];
-        return 1;
-}
-
-// manually collect data and save data into ref.txt
+// manually scan and collect IR/UV data and save data into ???scan.txt, ???ir.txt, ???uv.txt, etc.
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas)
 {    char tempStr[500];
 	char fnamescan[20];
@@ -604,71 +311,23 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 	int pre_statemain;
 
 	pre_statemain=statemain;
+	statemain=SWN; //3
 
 	sprintf(fnamescan, "%sscan", fleadname);
 	sprintf(fnameIR, "%sir", fleadname);
 	sprintf(fnameUV, "%suv", fleadname);
 
-	struct tm * timeinfo= localtime(&t2);
-	sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-					timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	printf("%s start UV/IR measurements\n",tempStr);
-	PC.uartwriteStr(tempStr);
-	PC.uartwriteStr("\% start UV/IR measurements\n");
-	// Skip moving motor to origin
-
-
-	statemain=SWN; //3
-
-	if (ampUV<0)
-		sprintf(tempStr,"uvt\r\n");
-	else
-		sprintf(tempStr,"uvs%02d\r\n",ampUV);
-	mBed.uartwriteStr(tempStr);
-	printf(tempStr); // PC.uartwriteStr(tempStr);
-	usleep(10000);
-	mBed.readlineTimeOut(1000);
-	//mBed.readline();
-
-	if (ampIR<0)
-			sprintf(tempStr,"irt\r\n");
-	else
-			sprintf(tempStr,"irs%02d\r\n",ampIR);
-
-	mBed.uartwriteStr(tempStr);
-	printf(tempStr); // PC.uartwriteStr(tempStr);
-	usleep(10000);
-	mBed.readline();
-
-	mBed.uartwriteStr("irg1\r\n");
-	printf("irg1 \r\n"); // PC.uartwriteStr("\% irg1 \r\n");
-	usleep(10000);
-	mBed.readline();
-
-
-	mBed.uartwriteStr("apdbv 141v\r\n");
-	printf("apdbv 141v\r\n"); //PC.uartwriteStr("\% apdbv 141v\r\n");
-	usleep(10000);
-	mBed.readline();
-
-	mBed.flushrxbuf();
-
-		// posA=1601; posB=1900; nSam=MAXCOL_DATA;
-		int scanSteps=posB-posA+1;
-		int scanOK;
-		// swnOK=daqBySWN(posA, scanSteps, nSam, dataIR, dataUV, fleadname);
-		scanOK=scanIRUV(posA, scanSteps, nSam, dataIR, dataUV, fnamescan); // for debug
-
-		if (scanOK==-1)
+	// 1. scan
+	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, 141, fnamescan)==-1)
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
-			PC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
+			daqModule.oPC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
 			cout<<"============================="<<endl<<endl;
-			PC.uartwriteStr("% =======================\r\n\r\n");
+			daqModule.oPC.uartwriteStr("% =======================\r\n\r\n");
         	goto Label_ReturnFailure;
 		}
 
-
+    // 2. Gaussian alignment
 		int optIR, optUV;
 		int gfitOK;
 		sprintf(tempStr,"%s.txt", fnamescan);
@@ -679,23 +338,10 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
     	goto Label_ReturnFailure;
         }
 
-		// Collect UV IR data at the optimal position
-        // measure IR first
 
-        int daqOK;
-        int Fs, nSample;
-        Fs=500;
-		nSample=nSmeas;//10*nSam;
-
-        sprintf(tempStr,"move -d 1 %d\r\n",optIR);
-		mBed.uartwriteStr(tempStr);
-		// PC.uartwriteStr(tempStr);
-		printf(tempStr);
-		usleep(10000);
-		mBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
-		usleep(500000);
-    	daqOK=daqIRUV(Fs, nSample, optIR,fnameIR);
-        if(daqOK==-1)
+	// Collect UV IR data at the optimal position
+    // 3. measure IR first
+        if(daqModule.daqIRUV(optIR, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameIR)==-1)
         {
         	cout<<"WARN: daqIRUV() for IR ("<<fnameIR<<".txt) fails. Continue main loop."<<endl;
         	goto Label_ReturnFailure;
@@ -707,115 +353,30 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         printf("daqIRUV() for Ir at MS=%d successes (%s.txt). meanIr=%f\r\n", optIR, fnameIR,muIR);
 
 
-        // measure UV second
-        sprintf(tempStr,"move -d 1 %d\r\n",optUV);
-        mBed.uartwriteStr(tempStr);
-        // PC.uartwriteStr(tempStr);
-       	printf(tempStr);
-   		usleep(10000);
-   		mBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
-   		usleep(500000);
-        daqOK=daqIRUV(Fs, nSample, optUV,fnameUV);
-        if(daqOK==-1)
+   // 4. measure UV second
+        if(daqModule.daqIRUV(optUV, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameUV)==-1)
         {
                 	cout<<"WARN: daqIRUV() for UV ("<<fnameUV<<".txt) fails. Continue main loop."<<endl;
                 	goto Label_ReturnFailure;
         }
-        // TODO: call matlab function calculate mean EUV
 		sprintf(tempStr,"%s.txt", fnameUV);
 		procDaqData(tempStr,&muIR, &muUV);
         printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", optUV, fnameUV, muUV);
 
-
-
+  // 5. return
 //Label_ReturnSuccess:
-    	mBed.uartwriteStr("uvt\r\n");
-        printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
-        mBed.uartwriteStr("irt\r\n");
-        printf("irt\r\n"); // PC.uartwriteStr("\% irt\r\n");
         cout<<"SUCCESS: Both scan and daq are OK. turn off lights. \r\n";
         statemain=pre_statemain;
         return 0;
 
 
 Label_ReturnFailure:
-		mBed.uartwriteStr("irt\r\n");
-		printf("irt\r\n"); // PC.uartwriteStr("\% irt\r\n");
-		mBed.uartwriteStr("uvt\r\n");
-		printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
-
 	    cout<<"FAILED: turn off lights.\r\n";
 		statemain=pre_statemain;
 		return -1; // ignore the data and continue the main loop
 }
 
-// Test Matlab Code Generation
-void testMatabCode()
-{
-	/*	// Test codes for getRand() and gfit()
 
-	double xx[100];
-	double yy[100];
-
-	time_t rawt = time(NULL); // Seconds since the Epoch. 1970-01-01
-	time(&rawt);
-
-	getRand(rawt,yy);
-    // getRand(10393,yy);
-	printf("[");
-	 for (int i=0;i<100;i++)
-		{	xx[i]=i;
-		    printf("%f, ", yy[i]);
-		    // printf("testfunc=%d\n",testfunc(i));
-		}
-	 printf("]\n");
-
-	 double sigma, mu, A;
-
-	  // // function [sigma, mu, A] = gfit(x,y,h) %#codegen
-	  // //  gfit(const real_T x[100], const real_T y[100], real_T h, real_T *sigma, real_T *mu, real_T *A);
-	  gfit(xx,yy,0.2, &sigma, &mu, &A);
-	  printf("sigma=%f, mu=%f, A=%f\n",sigma, mu, A);
-*/
-
-	// test codes for gfit_rdfile
-	// char *fname="wtrscan.txt";
-	//  char *fname="refscan_20130205_16h42m02s.txt";
-	char *fname="Large_refscan.txt";
-	//  char *fname="refscan.txt";
-	  int fsize[2];
-	  fsize[0]=1; fsize[1]=strlen(fname);
-	  double gfIR[3], gfUV[3];
-      gfIR[0]=-3; gfIR[1]=-3; gfIR[2]=-3;
-      gfUV[0]=-4; gfUV[1]=-4; gfUV[2]=-4;
-
-      // gfIR[0]=gfit_rdfile(fname, fsize); // gfit_SingleGfit_OK, .\work_readfile\readfile_v4.m
-     gfit_rdfile(fname, fsize, gfIR, gfUV);
-
-	 printf("gfIR=[%f, %f, %f]\r\n", gfIR[0],gfIR[1],gfIR[2]);
-	 printf("gfUV=[%f, %f, %f]\r\n", gfUV[0],gfUV[1],gfUV[2]);
-	 if (gfIR[2]<0 && gfUV[2]<0)
-	 {
-		printf("  reading \"%s\" or the Gaussian fitting failed.returned value =%f\n",fname,gfIR[0]);
-		return;
-	 }
-     int pkIR, pkUV;
-
-     pkIR=round(gfIR[0]); pkUV=round(gfUV[0]);
-     printf("  Gaussian fitting at \"%s\" successes. optIR=%d, optUV=%d\n",fname,pkIR, pkUV);
-
-
- 	char *fnameIR="refir.txt";
-	  fsize[0]=1; fsize[1]=strlen(fnameIR);
-	  double dIR[2], dUV[2];
-    dIR[0]=-3; dIR[1]=-3;
-    dUV[0]=-4; dUV[1]=-4;
-
-    meanfile(fname, fsize, dIR, dUV);
-    printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
-    		fnameIR, dIR[0], dIR[1], dUV[0], dUV[1]);
-
-}
 // process UART strings
 void process_UART(int *pstatemain)
 {
@@ -828,118 +389,119 @@ void process_UART(int *pstatemain)
 	if (*pstatemain!=IDLE && *pstatemain!=MBEDONLY)
 		{
 		printf("We only process UART when statemain==IDLE || MBEDONLY \r\n");
-		PC.uartwriteStr("We only process UART when statemain==IDLE || MBEDONLY \r\n");
+		daqModule.oPC.uartwriteStr("We only process UART when statemain==IDLE || MBEDONLY \r\n");
 		return;
 		}
 
 	// statemain is IDLE, process UART and change statemain accordingly
     // Read received mBed data and forward to PC
 	// chars_read=mBed.readline();// read characters
-	recvLines_mBed=mBed.readline(); // returns how many lines have been received
+	recvLines_mBed=daqModule.omBed.readline(); // returns how many lines have been received
 	if (recvLines_mBed > 0)
 	{
 		// printf("mBed->BB: %s", mBed.rxbuf);
 		// printf("\n"); //mBed may not send \n, manually add \n to stdio
-		mBed.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+		daqModule.omBed.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 	}
 
     // Read received command from PC
 	// chars_read = PC.uartread(); // read characters
-	recvLines_PC=PC.readline();
+	recvLines_PC=daqModule.oPC.readline();
 	if  (recvLines_PC>0)
 	{
 		// cout<<"received string from PC statemain="<<*pstatemain<<endl;
-		DEBUG2PCUART("% Beagle receives cmd from PC: ");
-		DEBUG2PCUART(PC.rxbuf);
+		DEBUG2PCUART("% PC->BB: ");
+		DEBUG2PCUART(daqModule.oPC.rxbuf);
 
 		// PC.uartwriteStr(PC.rxbuf);
 		/*  process special command from PC */
 		// NOTE: Putty console does not send \n at the end of the string
 		// therefore, not check \n as the end of the string
-		if (strncmp(PC.rxbuf, "quit\r",5)==0)
+		if (strncmp(daqModule.oPC.rxbuf, "quit\r",5)==0)
 		{   // quit the programme
-			PC.uartwriteStr("% Program is going to kill itself, good bye\n");
+			daqModule.oPC.uartwriteStr("% Program is going to kill itself, good bye\n");
 			sigint_handler(15); // program terminates here
 			return;
 	     }
-		if (strncmp(PC.rxbuf,"settime",7)==0)
+		if (strncmp(daqModule.oPC.rxbuf,"settime",7)==0)
 		{
 			int nArg;
 			int yy, mm ,dd, hh, min, ss;
-			nArg=sscanf(PC.rxbuf, "settime %d/%d/%d %d:%d:%d",&dd,&mm, &yy, &hh, &min, &ss);
+			nArg=sscanf(daqModule.oPC.rxbuf, "settime %d/%d/%d %d:%d:%d",&dd,&mm, &yy, &hh, &min, &ss);
 			if (nArg==6)
 				setBeagleRTC2(yy, mm, dd, hh, min, ss);
 			else
-			{PC.uartwriteStr("% settime command has incorrect parameters, Ignored.\r\n");
-			printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", PC.rxbuf);
+			{daqModule.oPC.uartwriteStr("% settime command has incorrect parameters, Ignored.\r\n");
+			printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", daqModule.oPC.rxbuf);
 			}
-			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
 		}
-		if (strncmp(PC.rxbuf,"mbed\r",5)==0)
+		if (strncmp(daqModule.oPC.rxbuf,"mbed\r",5)==0)
 		{
 			printf("SWITCH from %d to mBed mode (statemain=%d MBEDONLY). Connect to mBed directly\r\n",
 					*pstatemain, MBEDONLY);
-			PC.uartwriteStr("SWITCH to mBed mode (MBEDONLY). Connect to mBed directly for manual control\r\n");
+			daqModule.oPC.uartwriteStr("SWITCH to mBed mode (MBEDONLY). Connect to mBed directly for manual control\r\n");
 			*pstatemain=MBEDONLY;
-			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
 		}
 
-		if (strncmp(PC.rxbuf, "idle\r",5)==0)
+		if (strncmp(daqModule.oPC.rxbuf, "idle\r",5)==0)
 		{  // quit the programme
 		   printf("SWITCH from %d to IDLE mode (statemain=%d IDLE). \r\n",
 							*pstatemain, IDLE);
-		   PC.uartwriteStr("%switch back to IDLE\r\n");
+		   daqModule.oPC.uartwriteStr("%switch back to IDLE\r\n");
 		   *pstatemain=IDLE;
-			PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+		   daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 			return;
 		}
 
-		if (strncmp(PC.rxbuf, "mv2swt\r",7)==0 && *pstatemain==MBEDONLY)
+		if (strncmp(daqModule.oPC.rxbuf, "mv2swt\r",7)==0 && *pstatemain==MBEDONLY)
 		{
 
 			int pre_statemain;
 			pre_statemain=*pstatemain;
 			statemain=MOVEMOTOR; //2
-			if (moveMotor2Switch()<=0)
+			// if (moveMotor2Switch()<=0)
+			if (daqModule.moveMotor2Switch()<=0)
 				{  // moveMotor2Switch failed
-					cout<<"moveMotor2Switch failed. Cancel data collection"<<endl;
+					cout<<"daqModule.moveMotor2Switch failed."<<endl;
 					*pstatemain=pre_statemain;
 					return;
 				}
-
-			mBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-			PC.uartwriteStr("setm 1 0 0 100 1\r\n");
+			cout<<"daqModule.moveMotor2Switch OK."<<endl;
+			daqModule.omBed.uartwriteStr("setm 1 0 0 100 1\r\n");
+			DEBUGF("BB->mBed: setm 1 0 0 100 1\r\n");
 			usleep(10000);
-			mBed.readline();
+			daqModule.omBed.readline();
 			*pstatemain=pre_statemain;
 			return;
 		}
 
-		if (strncmp(PC.rxbuf, "swn&daq",7)==0)
+		if (strncmp(daqModule.oPC.rxbuf, "swn&daq",7)==0)
 				{  // quit the programme
 
 				   int nArg;
 				   int pos1, pos2,nS, ampIR, ampUV, nSmeas;
 				   char fname_prefix[20];
 
-				   nArg=sscanf(PC.rxbuf, "swn&daq %d %d %d %d %d %s %d",&pos1,&pos2, &nS, &ampIR, &ampUV, fname_prefix, &nSmeas);
+				   nArg=sscanf(daqModule.oPC.rxbuf, "swn&daq %d %d %d %d %d %s %d",&pos1,&pos2, &nS, &ampIR, &ampUV, fname_prefix, &nSmeas);
 				   if (nArg!=7)
-				   	{  PC.uartwriteStr("% Incorrect arguments for swn&daq pos1 pos2 nSam ampIR ampUV fname, Ignored.\r\n");
-				   		printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", PC.rxbuf);
-				   		PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+				   	{  daqModule.oPC.uartwriteStr("% Incorrect arguments for swn&daq pos1 pos2 nSam ampIR ampUV fname, Ignored.\r\n");
+				   		printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", daqModule.oPC.rxbuf);
+				   		daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 				   		return;
 				   	}
 				   printf("manually collect data and save to %s*.txt at statemain=%d. \r\n",
 				   									fname_prefix, *pstatemain);
 
-				   PC.uartwriteStr("%manually collect data and save to");
-				   PC.uartwriteStr(fname_prefix);
-				   PC.uartwriteStr("*.txt \r\n");
+				   daqModule.oPC.uartwriteStr("%manually collect data and save to");
+				   daqModule.oPC.uartwriteStr(fname_prefix);
+				   daqModule.oPC.uartwriteStr("*.txt \r\n");
 
                    printf("posA=%d, posB=%d, nSam=%d, ampIR=%d, ampUV=%d\n", pos1, pos2, nS, ampIR, ampUV);
-                   PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+                   daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
                    // int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
 				   manual_scandaq(pos1, pos2, nS,ampIR,ampUV,fname_prefix, nSmeas);
 
@@ -949,10 +511,10 @@ void process_UART(int *pstatemain)
 
 
 		//Otherwise, forward recieved string to console and mBed
-		printf("PC->mBed (line=%d): %s", recvLines_PC, PC.rxbuf);
+		printf("PC->BB->mBed (line=%d): %s", recvLines_PC, daqModule.oPC.rxbuf);
 		// mBed.uartwriteChar(PC.rxbuf, chars_read);
-		mBed.uartwriteStr(PC.rxbuf);
-        PC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+		daqModule.omBed.uartwriteStr(daqModule.oPC.rxbuf);
+		daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
 	} // end of if (PC.readline())
 	    /*  DEBUG code: simulate the string received from PC or mBed
 
@@ -972,97 +534,8 @@ void process_UART(int *pstatemain)
 
 }  // end of process_UART()
 
-// move Motor to destination
-// Input: destination in steps
-// return: motor's position after complete the move command
-int moveMotor2Dest(int dest)
-{
-	int nLines, nPars;
-	char cmdMove[20];
-	sprintf(cmdMove, "move -d 1 %d\r\n",dest);
-	// motorLED.uSW=0;
-	mBed.uartwriteStr(cmdMove);
-	do{
-			nLines=mBed.readline();
-	}while(nLines==0);
-	// cout << "received " <<nChars <<"characters"<<endl;
-	nPars=sscanf(mBed.rxbuf,
-			"motor[1] is motorLED: nOrigin=%d, nNow=%d, motorSpd=%f steps/s, fullStep=%d, statusLEDMotor=%d, uSW(p29)=%d",
-			&motorLED.nOrigin, &motorLED.nNow,&motorLED.motorSpd, &motorLED.fullStep, &motorLED.statusLEDMotor, &motorLED.uSW);
-	// cout<<"received "<<nChars<<"parameters of motroLED"<<endl;
-	printf("moveMotor2Dest done! (statemain=%d): ",statemain);
-	// cout<<mBed.rxbuf<<endl;
-	printf("motorLED: nOrigin=%d, nNow=%d, motorSpd=%f, fullStep=%d, statusMotor=%d, uSW=%d\r\n",
-			motorLED.nOrigin, motorLED.nNow, motorLED.motorSpd, motorLED.fullStep, motorLED.statusLEDMotor,
-			motorLED.uSW);
-
-   return motorLED.nNow;
-	/*	if (motorLED.nNow==dest)
-		{
-			printf("moterLED arrives at nNow=%d\r\n",motorLED.nNow);
-			return motorLED.nNow;
-		}
-		else
-			{ 	printf("moveMotor2Dest failed. motorLED now is at %d\r\n",motorLED.nNow);
-				return -1;
-			}
-	*/
-}
 
 
-
-int moveMotor2Switch()
-{
-	int nChars;
-	time_t t1, t2;
-	double wait_secs;
-	double Upbound_secs;
-    bool timeover;
-
-    Upbound_secs=30;
-    timeover=FALSE;
-	time(&t1);
-cout<<"move motor to switch position"<<endl;
-	motorLED.uSW=0;
-	mBed.flushrxbuf();
-	while(motorLED.uSW==0)
-	{	mBed.uartwriteStr("move -s 1 -2000\r\n");
-		PC.uartwriteStr("move -s 1 -2000\r\n");
-		do{
-			nChars=mBed.readline();
-			time(&t2);
-			wait_secs=difftime(t2,t1);
-			if (wait_secs>Upbound_secs)
-			{
-				timeover=TRUE;
-				break;
-			}
-		}while(nChars==0);
-
-		if (timeover==FALSE)
-		{
-			cout<<mBed.rxbuf;
-			nChars=sscanf(mBed.rxbuf,
-						"%% motor[1] is motorLED: nOrigin=%d, nNow=%d, motorSpd=%f steps/s, fullStep=%d, statusLEDMotor=%d, uSW(p29)=%d",
-						&motorLED.nOrigin, &motorLED.nNow,&motorLED.motorSpd, &motorLED.fullStep, &motorLED.statusLEDMotor, &motorLED.uSW);
-			// cout<<"movemotor2switch() receives  "<< mBed.rxbuf<<endl;
-			// cout<<"nChars="<<nChars<<", ";
-			cout<<"nNow="<<motorLED.nNow<<", return nChars="<<nChars<<endl;
-			return nChars;
-			// return 1;
-		}
-		else
-		{ // over time, no response
-			cout<<"moveMotor2Switch() time over. give up moving motor"<<endl;
-			return -1;
-		}
-
-	}
-
-	// should never reach here
-	return -1;
-
-}
 
 // Executes when the user presses Ctrl+C.
 // Closes the port, resets the terminal, and exits the program.
@@ -1074,8 +547,8 @@ void  sigint_handler(int sig)
 	printf("======================================================\n");
 	printf("GOOD LUCK\n\n");
 
-	mBed.uartclose();
-	PC.uartclose();
+	daqModule.omBed.uartclose();
+	daqModule.oPC.uartclose();
 	exit (sig);
 }
 
@@ -1100,16 +573,6 @@ void init_main(char *pNamemBed)
 		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 	printf("=================================================\n");
 
-	char *portName;
-	// portName=(char*)PORTMBED_NAME0;
-	if (mBed.uartopen(pNamemBed)!=-1)
-		cout<<"  UART port"<<mBed.portName<<" (uartID="<<mBed.uartID<<") OK"<<endl;
-
-	portName=(char *)PORTPC_NAME;
-	if (PC.uartopen(portName)!=-1)
-		cout<<"  UART port"<<PC.portName<<" (uartID="<<PC.uartID<<") OK"<<endl;
-
-
 }
 
 
@@ -1117,7 +580,7 @@ void setBeagleRTC(void)
 {
 	 int year, month ,day, hh, min, ss;
 
-	 PC.uartwriteStr("  Set Beagle's time and date ... ");
+	 daqModule.oPC.uartwriteStr("  Set Beagle's time and date ... ");
 
 	 printf("Do you want to set a new time? (Y/N)\r");
 	 char chgTime;
@@ -1139,9 +602,9 @@ void setBeagleRTC(void)
 	 struct tm * timeinfo= localtime(&t2);
 	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	 PC.uartwriteStr("  OK! ");
-	 PC.uartwriteStr(tempStr);
-	 PC.uartwriteStr("\r\n");
+	 daqModule.oPC.uartwriteStr("  OK! ");
+	 daqModule.oPC.uartwriteStr(tempStr);
+	 daqModule.oPC.uartwriteStr("\r\n");
 	 cout<<tempStr;
 
 

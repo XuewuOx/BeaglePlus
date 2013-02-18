@@ -18,14 +18,18 @@
 
 #ifdef DEBUG
    #define DEBUGF printf
-	#define DEBUG2PCUART PC.uartwriteStr
+	#define DEBUG2PCUART daqModule.oPC.uartwriteStr
 #else
     #define DEBUGF while(0)printf
-	#define DEBUG2PCUART while(0)PC.uartwriteStr
+	#define DEBUG2PCUART while(0)daqModule.oPC.uartwriteStr
 #endif
 
-// #define FALSE 0
-// #define TRUE 1
 
+#ifndef TRUE
+# define TRUE (1)
+#endif
+#ifndef FALSE
+# define FALSE (0)
+#endif
 
 #endif /* MAIN_H_ */

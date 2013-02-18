@@ -20,9 +20,11 @@ using namespace std;
 
 #include "main.h"
 #include "uartBeagle.h"
+#include "LoadmonDriver.h"
 
  // extern PC;
-extern uartBeagle PC;
+extern LoadmonDriver daqModule;
+
 extern int statemain;
 enum MAINSTATUS{
 	INIT =0,
@@ -150,7 +152,7 @@ int uartBeagle::uartread()
 	if (chars_read>=0)
 	{   rxbuf[chars_read]='\0'; // printf("rcv: %s",rxbuf);
 		 if (strcmp(InstName,"mBed")==0)
-			PC.uartwriteChar(rxbuf,chars_read);
+			 daqModule.oPC.uartwriteChar(rxbuf,chars_read);
 
 	}
 	return chars_read;
@@ -183,7 +185,7 @@ int uartBeagle::readUntilStr(char *strEnd)
 		{
 			// printf("receiv@readline(): %s",rxbuf);
 			if (strcmp(InstName,"mBed")==0)
-		    	PC.uartwriteChar(rxbuf-nChar, nChar);
+				daqModule.oPC.uartwriteChar(rxbuf-nChar, nChar);
 
 			// scan rxbuf to find how many lines have been received
 			// lineReceived=0;
@@ -340,9 +342,9 @@ int uartBeagle::readline()
     	if (strcmp(InstName,"mBed")==0)
     	{
     	  if (statemain==MBEDONLY || statemain==SWN)
-    		PC.uartwriteChar(rxbufptr, nChar);
+    		  daqModule.oPC.uartwriteChar(rxbufptr, nChar);
            if (statemain==DAQ && strcmp(rxbuf,"% motor[")!=0)
-    	  	PC.uartwriteChar(rxbufptr, nChar);
+        	   daqModule.oPC.uartwriteChar(rxbufptr, nChar);
     	}
     	// cout<<rxbufptr;
 
@@ -398,6 +400,16 @@ void uartBeagle::uartwriteStr(char *write_buffer)
 
 	len = strlen(write_buffer);
 	bytes_written = write(uartID, write_buffer, len);
+
+//	if (strcmp(InstName,"mBed")==0)
+//	{
+//		DEBUGF("BB->mBed: %s", write_buffer);
+//	}
+//	if (strcmp(InstName,"PC")==0)
+//		{
+//			DEBUGF("BB->PC: %s", write_buffer);
+//		}
+
 	if (bytes_written < len)
 	{
 		printf("Write serial(uartID=%d) failed \n", uartID);

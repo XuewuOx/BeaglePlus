@@ -28,13 +28,13 @@ using namespace std;
 #include "sigProcess.h"
 // #include "test.h"
 
-// Change the PORT_NAME for proparait  serial port
-// static const char *PORT_NAME = "/dev/ttyUSB0"; // for AirLink USB-232 converter
-static const char *PORTMBED_NAME0 = "/dev/ttyACM0"; // for mBed USB-232
-// static const char *PORTMBED_NAME1 = "/dev/ttyACM1"; // for mBed USB-232
-static const char *PORTPC_NAME = "/dev/ttyO2";  // for default RS232 console at BB
-// uartBeagle mBed("mBed");
-// uartBeagle PC("PC");
+#include "RdConfigFile.h"
+#define CONFIGFILENAME "config.conf"
+struct config configstruct;
+
+
+// Now file names of UART to mBed and PC are stored in config.conf file
+// and system parameters are read from  CONFIGFILENAME and converted into struct config
 
 LoadmonDriver daqModule;
 
@@ -91,17 +91,32 @@ int main(int argc, char* argv[]) {
 	unsigned int nDAQ;
     double elapsed_secs;
     char *pNamemBed;
+    char *pNamePC;
     int nChars;
     char tempStr[500];
 
     cout << "\n!!!Hello World!!!" << endl; // prints !!!Hello World!!!
     // cout<<"testfunc()="<<testfunc(5)<<endl;
 
-    cout <<argv[0];
+	if (get_config(CONFIGFILENAME, &configstruct)==EXIT_FAILURE)
+	{
+		printf("Reading config file %s failed",CONFIGFILENAME);
+		return EXIT_SUCCESS;
+
+	}
+    /* Check struct members */
+	int posA, posB;
+	printf("\r\nposA=%d, posB=%d, SpS=%d, apdBV=%f\r\n", configstruct.refscan.posA, configstruct.refscan.posB,
+		configstruct.refscan.SpS, configstruct.refscan.apdBV);
+
+	// read
+    pNamePC=configstruct.UARTFile_PC;
+	cout <<argv[0];
     if (argc<=1)
-    	{ pNamemBed=(char*)PORTMBED_NAME0; cout<<endl;}
+    	{ pNamemBed=configstruct.UARTFile_mBed; cout<<endl;}
     else
     	{ pNamemBed=argv[1]; cout <<argv[1]<<endl;}
+
 
     double ax[5];
     int n;
@@ -109,7 +124,6 @@ int main(int argc, char* argv[]) {
 
 
     // string tempStr2("dir%d=[%d %d %d %d %d ]");
-
     // string strTest("dir02=[0001 0002 0003 0004 0005 ]");
     // sscanf(strTest.c_str(),"dir%d=[%f %f %f %f %f ]",&n, &ax[0], &ax[1], &ax[2], &ax[3], &ax[4]);
     // sscanf(strTest.c_str(),tempStr2.c_str(),&n, ax, ax+1, ax+2, ax+3, ax+4);
@@ -117,7 +131,7 @@ int main(int argc, char* argv[]) {
 
     // Initialise global variables, display time, open UART ports, etc.
     statemain=INIT; // 0;
-    daqModule.initDriver(pNamemBed,(char *)PORTPC_NAME);
+    daqModule.initDriver(pNamemBed,pNamePC);
     daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
 
     setBeagleRTC();

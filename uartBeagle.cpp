@@ -177,6 +177,7 @@ int uartBeagle::readUntilStr(char *strEnd)
 	char *pChar;
 	bool findEndStr=0;
 
+	bufsize=MAX_COMMAND_LENGTH;
 	flushrxbuf();
 	lenStrEnd=strlen(strEnd);
 	while(1)

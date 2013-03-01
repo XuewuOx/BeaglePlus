@@ -71,14 +71,10 @@ int statemain;
 // void process_UART();
 void process_UART(int *pstatemain);
 void  sigint_handler(int sig);
-void testMatabCode();
 void init_main(char *pNamemBed);
-int moveMotor2Switch();
-int moveMotor2Dest(int dest);
 
-int scanIRUV(int a, int b, int nSperS, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA],char *fleadname);
-int daqIRUV(int Fs, int nSamples, int posMS, char * fname);
-int procScanData(char* fname, int* optIR, int* optUV);
+
+
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
 // int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
@@ -508,6 +504,31 @@ void process_UART(int *pstatemain)
 				   // *pstatemain=DAQ;
 				   return;
 				}
+		if (strncmp(daqModule.oPC.rxbuf, "daq",3)==0)
+			{
+			   int nArg;
+			   int pos1, ampIR, gainIR, ampUV, gainUV, nSmeas;
+			   char fname_prefix[20];
+               char tempStr[100];
+               double muIR, muUV;
+			   nArg=sscanf(daqModule.oPC.rxbuf, "daq %d %d %d %d %d %s %d",&pos1, &ampIR, &gainIR, &ampUV, &gainUV,fname_prefix, &nSmeas);
+			   if (nArg!=7)
+			      	{  daqModule.oPC.uartwriteStr("% Incorrect arguments for daq pos1 ampIR gainIR ampUV gainUV fname nSmeas, Ignored.\r\n");
+			   		   		printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", daqModule.oPC.rxbuf);
+			   		   		daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+			   		   		return;
+			      	}
+
+				if(daqModule.daqIRUV(pos1, nSmeas, FS_SCAN, ampIR, gainIR, ampUV, gainUV, 141, fname_prefix)==-1)
+				{
+							cout<<"WARN: daqIRUV() for UV ("<<fname_prefix<<".txt) fails. Continue main loop."<<endl;
+			   		   		return;
+				}
+				sprintf(tempStr,"%s.txt", fname_prefix);
+				procDaqData(tempStr,&muIR, &muUV);
+				printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", pos1, fname_prefix, muUV);
+				return;
+			}
 
 
 		//Otherwise, forward recieved string to console and mBed

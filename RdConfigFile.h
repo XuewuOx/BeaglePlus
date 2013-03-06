@@ -30,6 +30,8 @@ struct scanArg
 	int ampUV;
 	int gainUV;
 	float apdBV;
+
+	int PkRange[2]; // if the peak location found by Gaussian fitting is over this range, it is an invalid location.
 };
 
 struct daqArg

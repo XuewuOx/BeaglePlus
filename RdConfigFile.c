@@ -21,6 +21,7 @@ int get_config(char *filename, struct config *pconfig)
 {
 //      struct config configstruct;
 	FILE *file = fopen (filename, "r");
+	char *cfline;
 
 	if (file != NULL)
 	{
@@ -34,29 +35,71 @@ int get_config(char *filename, struct config *pconfig)
 				continue;
 			if (oneline[0]==';' ||oneline[0]=='%' )  /* ignore lines starting with a ; or % - they are comments */
 				continue;
-			// 6-th line [T2VTable], ignore
+
+			// read [T2VTable] table, 3 lines
 			if (oneline[0]=='[' && oneline[1]=='T' && oneline[2]=='2' && oneline[3]=='V' &&
 				oneline[4]=='T' && oneline[5]=='a' && oneline[6]=='b' && oneline[7]=='l' &&
 				oneline[8]=='e' && oneline[9]==']')
-			   { i=9;	continue;}
+			   { // first line of [T2Vtable]
+				if (fgets(oneline, sizeof(oneline), file) == NULL)
+					{ printf("ERROR: Reading [T2VTable] failed.\r\n");
+					  return EXIT_FAILURE;
+					}
+				cfline = strstr((char *)oneline,DELIM);
+				cfline = cfline + strlen(DELIM);
 
-			char *cfline;
+				if (readT2VTable(cfline, pconfig, 0)==EXIT_FAILURE)
+						return EXIT_FAILURE;
+				// 2nd line of [T2Vtable]
+				if (fgets(oneline, sizeof(oneline), file) == NULL)
+					{ printf("ERROR: Reading [T2VTable] failed.\r\n");
+					  return EXIT_FAILURE;
+					}
+				cfline = strstr((char *)oneline,DELIM);
+				cfline = cfline + strlen(DELIM);
+				if (readT2VTable(cfline, pconfig, 1)==EXIT_FAILURE)
+								return EXIT_FAILURE;
+
+				i=i+3; continue;
+			   }
+
 			cfline = strstr((char *)oneline,DELIM);
 			cfline = cfline + strlen(DELIM);
 			// printf("reading Line %d ... OK, %s\r\n", i, oneline);
-			printf("Line %d OK \"%s\"\r\n", i, oneline);
+			// printf("Line %d OK \"%s\"\r\n", i, oneline);
 
-			if (i == 1){
+			if(strstr(oneline,"refPkRange[low,up]=")!=NULL)
+			{
+				nArg=sscanf(cfline, "[%d, %d]",&(pconfig->refscan.PkRange[0]), &(pconfig->refscan.PkRange[1]));
+				if (nArg!=2) {
+					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
+					return EXIT_FAILURE;
+				}
+				i++; continue;
+			}
+
+			if(strstr(oneline,"wtrPkRange[low,up]=")!=NULL)
+			{
+				nArg=sscanf(cfline, "[%d, %d]",&(pconfig->wtrscan.PkRange[0]), &(pconfig->wtrscan.PkRange[1]));
+				if (nArg!=2) {
+					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
+					return EXIT_FAILURE;
+				}
+				i++; continue;
+			}
+
+
+			if (strstr(oneline,"UARTFile_mBed=")!=NULL){
 				memcpy(pconfig->UARTFile_mBed, cfline,strlen(cfline));
 				i++; continue;
 			}
 
-			if (i == 2){
+			if (strstr(oneline,"UARTFile_PC=")!=NULL){
 				memcpy(pconfig->UARTFile_PC,cfline,strlen(cfline));
 				i++; continue;
 			}
 
-			if (i == 3){
+			if (strstr(oneline,"refscan=")!=NULL){
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %d %d %f",&pconfig->refscan.posA, &pconfig->refscan.posB,
 						&pconfig->refscan.SpS, &pconfig->refscan.sFs,
 						&pconfig->refscan.ampIR, &pconfig->refscan.gainIR,
@@ -69,7 +112,7 @@ int get_config(char *filename, struct config *pconfig)
 				// printf("posA=%d, posB=%d\r\n", pconfig->refscan.posA, pconfig->refscan.posB);
 				i++; continue;}
 
-			if (i == 4){
+			if (strstr(oneline,"wtrscan=")!=NULL){
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %d %d %f",&pconfig->wtrscan.posA, &pconfig->wtrscan.posB,
 						&pconfig->wtrscan.SpS, &pconfig->wtrscan.sFs,
 						&pconfig->wtrscan.ampIR, &pconfig->wtrscan.gainIR,
@@ -80,7 +123,7 @@ int get_config(char *filename, struct config *pconfig)
 					return EXIT_FAILURE;
 					}
 				i++; continue;}
-			if (i == 5){
+			if (strstr(oneline,"refdaq=")!=NULL){
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %f",
 						&pconfig->refdaq.nSam, &pconfig->refdaq.sFs,
 						&pconfig->refdaq.ampIR, &pconfig->refdaq.gainIR,
@@ -92,7 +135,7 @@ int get_config(char *filename, struct config *pconfig)
 					}
 				i++;continue;}
 
-			if (i == 6){
+			if (strstr(oneline,"wtrdaq=")!=NULL){
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %f",
 						&pconfig->wtrdaq.nSam, &pconfig->wtrdaq.sFs,
 						&pconfig->wtrdaq.ampIR, &pconfig->wtrdaq.gainIR,
@@ -105,7 +148,8 @@ int get_config(char *filename, struct config *pconfig)
 
 				i++;continue;
 				}
-			if (i == 7){
+
+			if (strstr(oneline,"slowstartDelay=")!=NULL){
 				nArg=sscanf(cfline, "%ds", &pconfig->slowstartDelay);
 				if (nArg!=1) {
 					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
@@ -113,23 +157,6 @@ int get_config(char *filename, struct config *pconfig)
 					}
 				i++;continue;
 				}
-			if (i==8)
-				{ // line [T2VTable], ignore
-					i++;continue;}
-			if (i==9)
-			{
-				if (readT2VTable(cfline, pconfig, 0)==EXIT_FAILURE)
-					return EXIT_FAILURE;
-				else
-				 { i++;continue;}
-			}
-
-			if (i==10){
-				if (readT2VTable(cfline, pconfig, 1)==EXIT_FAILURE)
-					return EXIT_FAILURE;
-				else
-				 { i++;continue;}
-			}
 
 			i++;
 		} // End while
@@ -184,6 +211,7 @@ int readT2VTable(char *cfline, struct config *pconfig, int lineID)
 	{
 	while (k<nChar && (cfline[k]==' ' || cfline[k]=='\t' || cfline[k] =='\n' || cfline[k]=='\r'))
 		{ k++; }
+	if (k>=nChar) break;
 	sscanf(cfline+k, "%f", &pconfig->T2VTable[lineID][j++]);
 
 	while (k<nChar && (cfline[k]!=' ' && cfline[k]!='\t' && cfline[k]!='\n' && cfline[k]!='\r'))

@@ -52,7 +52,7 @@ int openDataLogFile(struct struct_DataLog *pDataLog, char *flogname)
     		fprintf(fp, " IRnorm\t\tUVnorm");
     		fprintf(fp, "\t\tSS\t\t\tCOD");
 
-    		fprintf(fp, "\t\t\tIRref\t\tIRref\t\tpkIRref\tpkUVref");
+    		fprintf(fp, "\t\t\tIRref\t\tUVref\t\tpkIRref\tpkUVref");
     		fprintf(fp, "\tIRwtr\t\tUVwtr\t\tpkIRwtr\tpkUVwtr");
     		fprintf(fp, "\tstdIRref\tstdUVref\tsigmaIRref\tsigmaUVref");
     		fprintf(fp, "\tstdIRwtr\tstdUVwtr\tsigmaIRwtr\tsigmaUVwtr");
@@ -85,7 +85,7 @@ int appendDataLog(struct struct_DataLog *pDataLog)
 	fprintf(fp, " %02d\t%02d\t%02d",pd->hour,pd->min,pd->sec);
 	fprintf(fp, "\t%08.3f\t%08.3f",pd->IRnorm, pd->UVnorm);
 	fprintf(fp, "\t%08.3f\t%08.3f",pd->SS,pd->COD);
-	fprintf(fp, "\t%08.3f\t%08.3f\t%04d\t%04d", pd->IRref, pd->IRref, pd->pkIRref, pd->pkUVref);
+	fprintf(fp, "\t%08.3f\t%08.3f\t%04d\t%04d", pd->IRref, pd->UVref, pd->pkIRref, pd->pkUVref);
 	fprintf(fp, "\t%08.3f\t%08.3f\t%04d\t%04d", pd->IRwtr, pd->UVwtr, pd->pkIRwtr, pd->pkUVwtr);
 	fprintf(fp, "\t%08.3f\t%08.3f\t%08.3f\t%08.3f", pd->stdIRref, pd->stdUVref, pd->sigmaIRref, pd->sigmaUVref);
 	fprintf(fp, "\t%08.3f\t%08.3f\t%08.3f\t%08.3f", pd->stdIRwtr, pd->stdUVwtr, pd->sigmaIRwtr, pd->sigmaUVwtr);

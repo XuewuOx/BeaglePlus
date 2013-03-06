@@ -12,6 +12,15 @@
 #include <iostream>
 using namespace std;
 
+#define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
+
+
+#include "RdConfigFile.h"
+#include "WrtDataLogFile.h"
+
+struct config configstruct;
+struct struct_DataLog currentdatalog;
+
 
 #include "LoadmonDriver.h"
 
@@ -29,6 +38,8 @@ struct MOTORSTATUS{
 };
 
 MOTORSTATUS motorLED;
+
+
 
 /*
 LoadmonDriver::LoadmonDriver(): omBed("mBed"), oPC("PC")
@@ -70,11 +81,47 @@ void LoadmonDriver::initBeagle()
 
 }
 
-int LoadmonDriver::initDriver(char *uartName_mBed, char *uartName_PC)
+int LoadmonDriver::initDriver(char *fconfig)
+{
+	int uartID1, uartID2;
+
+		initBeagle();
+
+		if (get_config(fconfig, &configstruct)==EXIT_FAILURE)
+		{
+			printf("Reading config file %s failed",fconfig);
+			return EXIT_FAILURE;
+		}
+		uartID1=omBed.uartopen(configstruct.UARTFile_mBed);
+			if (uartID1!=-1)
+				cout<<"  UART port"<<omBed.portName<<" (uartID="<<omBed.uartID<<") OK"<<endl;
+
+			uartID2=oPC.uartopen(configstruct.UARTFile_PC);
+			if (uartID2!=-1)
+				cout<<"  UART port"<<oPC.portName<<" (uartID="<<oPC.uartID<<") OK"<<endl;
+
+			if (uartID1==-1 || uartID2==-1)
+				return -1;
+			else
+			    return EXIT_SUCCESS;
+
+}
+
+
+int LoadmonDriver::initDriver(char *fconfig, char *uartName_mBed, char *uartName_PC)
 {
 	int uartID1, uartID2;
 
 	initBeagle();
+
+	if (get_config(fconfig, &configstruct)==EXIT_FAILURE)
+	{
+		printf("Reading config file %s failed",fconfig);
+		return EXIT_FAILURE;
+	}
+
+	strcpy(configstruct.UARTFile_mBed, uartName_mBed);
+	strcpy(configstruct.UARTFile_PC, uartName_PC);
 
 	uartID1=omBed.uartopen(uartName_mBed);
 	if (uartID1!=-1)
@@ -87,18 +134,60 @@ int LoadmonDriver::initDriver(char *uartName_mBed, char *uartName_PC)
 	if (uartID1==-1 || uartID2==-1)
 		return -1;
 	else
-	    return 1;
+	    return EXIT_SUCCESS;
+
 }
 
-int LoadmonDriver::initDriver(int uartID_mBed, int uartID_PC)
+int LoadmonDriver::initDriver(char *fconfig, int uartID_mBed, int uartID_PC)
 {
 	initBeagle();
+	if (get_config(fconfig, &configstruct)==EXIT_FAILURE)
+	{
+		printf("Reading config file %s failed",fconfig);
+		return EXIT_FAILURE;
+	}
+
 	omBed.uartID=uartID_mBed;
 	oPC.uartID=uartID_PC;
-	return 1;
+	return EXIT_SUCCESS;
 
 }
 
+int LoadmonDriver::selftest()
+{
+	// PC.uartwriteStr("resetmbed\r\n");
+		usleep(1000);
+
+		oPC.uartwriteStr("  Testing the motor ...");
+		// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
+		// printf("setm 1 0 30 100 1\r\n");
+		// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
+		// usleep(100);
+
+		// while (mBed.readline()==0){}
+		omBed.flushrxbuf();
+		printf((char *)"move -s 1 100\r\n");
+		omBed.uartwriteStr((char *)"move -s 1 100\r\n");
+		usleep(1000);
+		// while (mBed.readline()==0){}
+		if (omBed.readlineTimeOut(100000)==-1)
+			{
+			cout<<"Failed to communicate with mBed to move motor\r\n";
+			return -1;
+			}
+
+		oPC.uartwriteStr((char *)" ... ");
+		printf("move -s 1 -100\r\n");
+		omBed.uartwriteStr((char *)"move -s 1 -100\r\n");
+		usleep(1000);
+		while (omBed.readline()==0){}
+		// sleep one second and readline to clear the rx buffer
+		// This is to avoid confusing strings from mbed uart.
+		sleep(1);
+		omBed.readline();
+		oPC.uartwriteStr(" OK\r\n");
+		return EXIT_SUCCESS;
+}
 
 void LoadmonDriver::finishDriver()
 {
@@ -106,6 +195,121 @@ void LoadmonDriver::finishDriver()
 		oPC.uartclose();
 }
 
+
+float LoadmonDriver::readTemperature()
+{
+	int nChars;
+	float temp;
+    char *pStr;
+
+
+	omBed.readline();
+    omBed.flushrxbuf();
+    omBed.uartwriteStr("rdtemp\r\n");
+	if (omBed.readlineTimeOut(30000)<=0)
+	{  // no response from mbed is received
+		return -999.9;
+	}
+	// printf("received %s", omBed.rxbufptr);
+	if (strlen(omBed.rxbufptr)>100)
+	{
+		return -999.9;
+	}
+	pStr = strstr((char *)omBed.rxbufptr,"temperature=");
+	sscanf(pStr, "temperature=%f\r\n", &temp);
+    // cout<<"get tempearture="<<temp<<endl;
+	return temp;
+}
+
+int LoadmonDriver::setAPDBV(float apdbv)
+{
+	char cmdStr[20];
+
+	sprintf(cmdStr,"apdbv %7.2fv\r\n", apdbv);
+	omBed.flushrxbuf();
+	omBed.uartwriteStr(cmdStr);
+	if (omBed.readlineTimeOut(30000)<=0)
+		{  // no response from mbed is received
+			return -1;
+		}
+	else
+		return EXIT_SUCCESS;
+}
+
+int LoadmonDriver::setAPDBV(float apdbv, int *aomv)
+{
+	char cmdStr[20];
+	float aomv2;
+
+	sprintf(cmdStr,"apdbv %7.2fv\r\n", apdbv);
+	omBed.flushrxbuf();
+	omBed.uartwriteStr(cmdStr);
+	if (omBed.readlineTimeOut(30000)<=0)
+		{  // no response from mbed is received
+			*aomv=-1;
+			return -1;
+		}
+	else
+	{
+		char *pStr;
+		pStr = strstr((char *)omBed.rxbufptr,"analog output=");
+		if (sscanf(pStr,"analog output=%fmv", &aomv2)!=1)
+			*aomv=-1;
+		else
+			*aomv=round(aomv2);
+		return EXIT_SUCCESS;
+	}
+}
+
+int LoadmonDriver::readTsetV()
+{
+	float temperature;
+	float IntervalTgrid;
+	int i;
+
+	temperature=readTemperature();
+	if (temperature<configstruct.T2VTable[0][0] || temperature>configstruct.T2VTable[0][LENT2VTABLE])
+		return -1;
+
+	IntervalTgrid=abs(configstruct.T2VTable[0][1]-configstruct.T2VTable[0][0])/2;
+	for (i=0; i<LENT2VTABLE;i++)
+	{
+		if (abs(temperature-configstruct.T2VTable[0][i])<=IntervalTgrid)
+		{
+			printf("T=%7.2fdegC, V=%7.2fv\r\n", temperature, configstruct.T2VTable[1][i]);
+			setAPDBV(configstruct.T2VTable[1][i]);
+			return EXIT_SUCCESS;
+		}
+	}
+	return -1;
+}
+
+int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
+{
+	float IntervalTgrid;
+	// float temp2, bv2;
+	int i;
+
+	*tempDeg=readTemperature();
+	// printf("temp2=%f\r\n",temp2);
+	if (*tempDeg<configstruct.T2VTable[0][0] || *tempDeg>configstruct.T2VTable[0][LENT2VTABLE])
+		return -1;
+
+	IntervalTgrid=abs(configstruct.T2VTable[0][1]-configstruct.T2VTable[0][0])/2;
+	for (i=0; i<LENT2VTABLE;i++)
+	{
+		if (abs(*tempDeg-configstruct.T2VTable[0][i])<=IntervalTgrid)
+		{
+			// printf("T=%7.2fdegC, V=%7.2fv\r\n", temp2, configstruct.T2VTable[1][i]);
+			*apdbv=configstruct.T2VTable[1][i];
+			setAPDBV(*apdbv, aomv);
+			// *apdbv=bv2;
+			return EXIT_SUCCESS;
+		}
+	}
+	return EXIT_FAILURE;
+
+}
 
 int LoadmonDriver::moveMotor2Switch()
 {
@@ -214,7 +418,7 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	printf(tempStr); //PC.uartwriteStr("\% apdbv 141v\r\n");
 	usleep(10000);
 	omBed.readline();
-
+	sleep(configstruct.slowstartDelay); // wait for UV/IR reaches expected strength
 	return;
 }
 

@@ -29,8 +29,10 @@ using namespace std;
 // #include "test.h"
 
 #include "RdConfigFile.h"
-#define CONFIGFILENAME "config.conf"
-struct config configstruct;
+#include "WrtDataLogFile.h"
+
+extern struct config configstruct;
+extern struct struct_DataLog currentdatalog;
 
 
 // Now file names of UART to mBed and PC are stored in config.conf file
@@ -73,8 +75,9 @@ void process_UART(int *pstatemain);
 void  sigint_handler(int sig);
 void init_main(char *pNamemBed);
 
-
-
+void readTime(int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
+void readTime2(time_t tnow, int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
+int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog);
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
 // int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
@@ -83,7 +86,9 @@ void setBeagleRTC(void);
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
 void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
-
+#define UARTNAME_PC "/dev/ttyO2"
+#define DATAFILEPATH "./data/"
+#define DAQINTERVAL_s 60
 
 int main(int argc, char* argv[]) {
 
@@ -91,95 +96,71 @@ int main(int argc, char* argv[]) {
 	unsigned int nDAQ;
     double elapsed_secs;
     char *pNamemBed;
-    char *pNamePC;
+    char pNamePC[20]="/dev/ttyO2";
     int nChars;
     char tempStr[500];
+    int returnstate; // a variable returned by a function
+    int yy,mm, dd, hh, min, ss;
 
     cout << "\n!!!Hello World!!!" << endl; // prints !!!Hello World!!!
     // cout<<"testfunc()="<<testfunc(5)<<endl;
 
-	if (get_config(CONFIGFILENAME, &configstruct)==EXIT_FAILURE)
-	{
-		printf("Reading config file %s failed",CONFIGFILENAME);
-		return EXIT_SUCCESS;
+    // Initialise global variables, display time, open UART ports, etc.
+    statemain=INIT; // 0;
 
-	}
+	// read configuration iile and  initialise londmon driver
+    if (argc<=1)
+    	{ returnstate=daqModule.initDriver(CONFIGFILENAME); }
+    else
+    	{   pNamemBed=argv[1]; cout <<argv[1]<<endl;
+    	returnstate=daqModule.initDriver(CONFIGFILENAME, pNamemBed, UARTNAME_PC);
+    	}
+
+    if (returnstate!=EXIT_SUCCESS)
+    {
+    	cout<<"LoadmonDriver::initDriver() failed. Exit.\r\n";
+    	return EXIT_FAILURE;
+    }
+
     /* Check struct members */
 	int posA, posB;
 	printf("\r\nposA=%d, posB=%d, SpS=%d, apdBV=%f\r\n", configstruct.refscan.posA, configstruct.refscan.posB,
 		configstruct.refscan.SpS, configstruct.refscan.apdBV);
+	daqModule.selftest();
+	sleep(1);
 
-	// read
-    pNamePC=configstruct.UARTFile_PC;
-	cout <<argv[0];
-    if (argc<=1)
-    	{ pNamemBed=configstruct.UARTFile_mBed; cout<<endl;}
-    else
-    	{ pNamemBed=argv[1]; cout <<argv[1]<<endl;}
+	// Set BB's clock
+	setBeagleRTC();
 
+	// init and test datalog.txt file
 
-    double ax[5];
-    int n;
-    int returnstate; // a variable returned by a function
+	readTime(&yy, &mm, &dd, &hh, &min, &ss);
+	char datafilename[100];
+	sprintf(currentdatalog.nameLogFile,"%sdatalog_%04d%02d%02d.txt",DATAFILEPATH, yy, mm, dd);
+	if (openDataLogFile(&currentdatalog, currentdatalog.nameLogFile)==EXIT_FAILURE)
+	{
+		perror("Open data log file datalog.txt failed\r\n");
+		return EXIT_FAILURE;
+	}
+	initDataLog(&currentdatalog, hh, min, ss);
+	daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
+	appendDataLog(&currentdatalog);
 
-
+	daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
     // string tempStr2("dir%d=[%d %d %d %d %d ]");
     // string strTest("dir02=[0001 0002 0003 0004 0005 ]");
     // sscanf(strTest.c_str(),"dir%d=[%f %f %f %f %f ]",&n, &ax[0], &ax[1], &ax[2], &ax[3], &ax[4]);
     // sscanf(strTest.c_str(),tempStr2.c_str(),&n, ax, ax+1, ax+2, ax+3, ax+4);
     // cout<<"dir"<<n<<"=["<<ax[0]<<ax[1]<<ax[2]<<ax[3]<<ax[4]<<" ]"<<endl;
 
-    // Initialise global variables, display time, open UART ports, etc.
-    statemain=INIT; // 0;
-    daqModule.initDriver(pNamemBed,pNamePC);
-    daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
 
-    setBeagleRTC();
-    printf(" Testing file reading & Gaussian fitting\r\n");
 	// Test Matlab Code Generation
+    printf(" Testing file reading & Gaussian fitting\r\n");
 	testMatabCode();
-
-	usleep(1000);
-    // PC.uartwriteStr("PC.uartwriteStr() success\n");
-    usleep(1000);
-    //----------------------------------
-
-
-	// PC.uartwriteStr("resetmbed\r\n");
-	usleep(1000);
 
 	// Assign a handler to close the serial port on Ctrl+C.
 	signal (SIGINT, &sigint_handler);
 	printf("Press Ctrl+C to exit the program.\n");
-
-
-	daqModule.oPC.uartwriteStr("  Testing the motor ...");
-	// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
-	// printf("setm 1 0 30 100 1\r\n");
-	// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
-	// usleep(100);
-
-	// while (mBed.readline()==0){}
-	daqModule.omBed.flushrxbuf();
-	printf("move -s 1 100\r\n");
-	daqModule.omBed.uartwriteStr("move -s 1 100\r\n");
-	usleep(1000);
-	// while (mBed.readline()==0){}
-	if (daqModule.omBed.readlineTimeOut(100000)==-1)
-		{
-		cout<<"Failed to communicate with mBed to move motor\r\n";
-		return -1;
-		}
-
-	daqModule.oPC.uartwriteStr(" ... ");
-	printf("move -s 1 -100\r\n");
-	daqModule.omBed.uartwriteStr("move -s 1 -100\r\n");
-	usleep(1000);
-	while (daqModule.omBed.readline()==0){}
-
-	daqModule.oPC.uartwriteStr(" OK\r\n");
-
-
 
 
 
@@ -203,8 +184,8 @@ int main(int argc, char* argv[]) {
 	time(&t1);
 	t1-=60; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
-printf("main loop starts\r\n");
-daqModule.oPC.uartwriteStr(" Main loop starts \r\n");
+	printf("main loop starts\r\n");
+	daqModule.oPC.uartwriteStr(" Main loop starts \r\n");
 
 while (1)
 {
@@ -220,11 +201,20 @@ while (1)
 		// printf("check new time t2\r\n");
 		elapsed_secs=difftime(t2,t1);
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
-		if (elapsed_secs>=10)
+		if (elapsed_secs>=DAQINTERVAL_s)
 			{
-			t1=t2;
-			printf("skip %d-th DAQ for debuging \r\n", ++nDAQ);
-			// statemain=DAQ; // to start data acquisition
+			readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
+			printf("[%d/%d/%d %02d:%02d:%02d] ",yy,mm,dd,hh,min,ss);
+			 // collect data
+			 initDataLog(&currentdatalog, hh, min, ss);
+			 daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
+
+			 printf("skip %d-th DAQ for debuging \r\n\r\n", ++nDAQ);
+			 // statemain=DAQ; // to start data acquisition
+
+			 // record data
+			 recordData(t1, t2,&currentdatalog);
+			 t1=t2;
 			}
 		break;
 		}
@@ -304,11 +294,49 @@ while (1)
 
     cout<<"=== EXCEPTION main loop exit! ==="<<endl;
     daqModule.oPC.uartwriteStr("EXCEPTION main loop exit\r\n");
-    usleep(1000);
-	sigint_handler(15);
+    sleep(1);
+    // force terminate program
+   	sigint_handler(15); // program terminates here
     return 0;
 }
 
+int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
+{
+    int y0,m0, d0, hh0, min0, ss0;
+    int yn,mn, dn, hhnow, minnow, ssnow;
+	struct tm * timeinfo= localtime(&tlastrecord);
+	 y0=timeinfo->tm_year+1900;	 m0=timeinfo->tm_mon+1;
+	 d0=timeinfo->tm_mday;	 hh0=timeinfo->tm_hour;
+	 min0=timeinfo->tm_min;	 ss0=timeinfo->tm_sec;
+
+	 timeinfo= localtime(&tnow);
+	 yn=timeinfo->tm_year+1900;	 mn=timeinfo->tm_mon+1;
+	 dn=timeinfo->tm_mday;	 hhnow=timeinfo->tm_hour;
+	 minnow=timeinfo->tm_min;	 ssnow=timeinfo->tm_sec;
+
+	 if (hhnow!=hh0)
+	// if(minnow!=min0)
+	 { //different hour, close file to save data and reopen it
+		closeDataLogFile(pDataLog->handleLogFile);
+
+		if(dn!=d0)
+		{ // new day, create new file
+			sprintf(pDataLog->nameLogFile,"%sdatalog_%04d%02d%02d.txt",DATAFILEPATH, yn, mn, dn);
+		}
+		else
+		{// same day
+
+		}
+
+		if (openDataLogFile(pDataLog, pDataLog->nameLogFile)==EXIT_FAILURE)
+		{
+			perror("Open data log file datalog.txt failed\r\n");
+			return EXIT_FAILURE;
+		}
+	 }
+
+	 appendDataLog(pDataLog);
+}
 
 
 // manually scan and collect IR/UV data and save data into ???scan.txt, ???ir.txt, ???uv.txt, etc.
@@ -349,8 +377,16 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         }
 
 
+        if (optIR<10 && optUV<10)
+        	{ cout << "WARN: Both peaks of both IR and UV are invalid"<<endl;
+        	  goto Label_ReturnFailure;
+        	}
 	// Collect UV IR data at the optimal position
     // 3. measure IR first
+        if (optIR<10)
+        	{   cout<<"make optUV="<<optUV<<"for IR"<<endl;
+        		optIR=optUV;
+        	}
         if(daqModule.daqIRUV(optIR, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameIR)==-1)
         {
         	cout<<"WARN: daqIRUV() for IR ("<<fnameIR<<".txt) fails. Continue main loop."<<endl;
@@ -364,6 +400,11 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 
 
    // 4. measure UV second
+        if (optIR<10)
+                	{   cout<<"make use of optIR="<<optUV<<"for UV"<<endl;
+                		optUV=optIR;
+                	}
+
         if(daqModule.daqIRUV(optUV, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameUV)==-1)
         {
                 	cout<<"WARN: daqIRUV() for UV ("<<fnameUV<<".txt) fails. Continue main loop."<<endl;
@@ -518,6 +559,7 @@ void process_UART(int *pstatemain)
 				   // *pstatemain=DAQ;
 				   return;
 				}
+
 		if (strncmp(daqModule.oPC.rxbuf, "daq",3)==0)
 			{
 			   int nArg;
@@ -541,6 +583,12 @@ void process_UART(int *pstatemain)
 				sprintf(tempStr,"%s.txt", fname_prefix);
 				procDaqData(tempStr,&muIR, &muUV);
 				printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", pos1, fname_prefix, muUV);
+				return;
+			}
+		if (strncmp(daqModule.oPC.rxbuf, "readTsetV",9)==0)
+			{
+				if (daqModule.readTsetV()!=EXIT_SUCCESS)
+					cout<<"WARN: readTsetV() failed. "<<endl;
 				return;
 			}
 
@@ -584,6 +632,7 @@ void  sigint_handler(int sig)
 
 	daqModule.omBed.uartclose();
 	daqModule.oPC.uartclose();
+	closeDataLogFile(currentdatalog.handleLogFile);
 	exit (sig);
 }
 
@@ -608,6 +657,32 @@ void init_main(char *pNamemBed)
 		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 	printf("=================================================\n");
 
+}
+
+void readTime(int *yy, int *mm, int *dd, int *hh, int *min, int *ss)
+{
+	 time_t tnow;
+	 time(&tnow);
+	 struct tm * timeinfo= localtime(&tnow);
+	 *yy=timeinfo->tm_year+1900;
+	 *mm=timeinfo->tm_mon+1;
+	 *dd=timeinfo->tm_mday;
+	 *hh=timeinfo->tm_hour;
+	 *min=timeinfo->tm_min;
+	 *ss=timeinfo->tm_sec;
+}
+
+void readTime2(time_t tnow, int *yy, int *mm, int *dd, int *hh, int *min, int *ss)
+{
+
+	 time(&tnow);
+	 struct tm * timeinfo= localtime(&tnow);
+	 *yy=timeinfo->tm_year+1900;
+	 *mm=timeinfo->tm_mon+1;
+	 *dd=timeinfo->tm_mday;
+	 *hh=timeinfo->tm_hour;
+	 *min=timeinfo->tm_min;
+	 *ss=timeinfo->tm_sec;
 }
 
 
@@ -635,6 +710,10 @@ void setBeagleRTC(void)
 
 	 time(&t2);
 	 struct tm * timeinfo= localtime(&t2);
+	 readTime(&year, &month, &day, &hh, &min, &ss);
+	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d]\r\n",year, month,day,hh,min, ss);
+	 cout<<tempStr;
+
 	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 	 daqModule.oPC.uartwriteStr("  OK! ");

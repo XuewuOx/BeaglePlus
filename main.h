@@ -14,7 +14,7 @@
 #ifndef MAIN_H_
 #define MAIN_H_
 
-#define DEBUG
+// #define DEBUG
 
 #ifdef DEBUG
    #define DEBUGF printf

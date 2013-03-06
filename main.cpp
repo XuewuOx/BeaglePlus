@@ -80,6 +80,7 @@ void readTime2(time_t tnow, int *yy, int *mm, int *dd, int *hh, int *min, int *s
 int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog);
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
+int auto_scandaq(struct scanArg *pscanArg, struct daqArg* pdaqArg, char *fleadname);
 // int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 
 void setBeagleRTC(void);
@@ -203,13 +204,24 @@ while (1)
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
 		if (elapsed_secs>=DAQINTERVAL_s)
 			{
+			nDAQ++;
 			readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
-			printf("[%d/%d/%d %02d:%02d:%02d] ",yy,mm,dd,hh,min,ss);
+			sprintf(tempStr,"\r\n[%d/%d/%d %02d:%02d:%02d] start %d-th UV/IR measurements\n",yy,mm,dd,hh,min,ss, nDAQ);
+			printf("%s", tempStr);
+			daqModule.oPC.uartwriteStr(tempStr);
 			 // collect data
 			 initDataLog(&currentdatalog, hh, min, ss);
 			 daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
 
-			 printf("skip %d-th DAQ for debuging \r\n\r\n", ++nDAQ);
+			 //reference scanning and daq
+			 auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), "ref");
+			 // manual_scandaq(1750, 1900,10,25,00,"ref", 2000); // for debug
+
+			 // water scanning and daq
+			 // auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
+
+			 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
+			 // printf("skip %d-th DAQ for debugging \r\n\r\n", nDAQ);
 			 // statemain=DAQ; // to start data acquisition
 
 			 // record data
@@ -236,7 +248,7 @@ while (1)
 		sprintf(tempStr,"start %d-th UV/IR measurement\n",nDAQ);
 		daqModule.oPC.uartwriteStr(tempStr);
 
-		manual_scandaq(100, 300,10,25,00,"wtr", 10000);
+		auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
 
 //=====================================================
 		// dataIR and dataUV now is saved as a string in *.txt file
@@ -314,9 +326,10 @@ int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 	 dn=timeinfo->tm_mday;	 hhnow=timeinfo->tm_hour;
 	 minnow=timeinfo->tm_min;	 ssnow=timeinfo->tm_sec;
 
-	 if (hhnow!=hh0)
-	// if(minnow!=min0)
+	// if (hhnow!=hh0)
+	if(minnow!=min0)
 	 { //different hour, close file to save data and reopen it
+
 		closeDataLogFile(pDataLog->handleLogFile);
 
 		if(dn!=d0)
@@ -328,6 +341,9 @@ int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 
 		}
 
+
+
+
 		if (openDataLogFile(pDataLog, pDataLog->nameLogFile)==EXIT_FAILURE)
 		{
 			perror("Open data log file datalog.txt failed\r\n");
@@ -336,8 +352,20 @@ int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 	 }
 
 	 appendDataLog(pDataLog);
+		printf("save currentDatalog to %s ... OK\r\n",pDataLog->nameLogFile);
 }
 
+
+int auto_scandaq(struct scanArg *pscanArg, struct daqArg* pdaqArg, char *fleadname)
+{
+	int posA, posB, nSam, ampIR, ampUV;
+	int nSmeas;
+	posA=pscanArg->posA; posB=pscanArg->posB;
+	nSam=pscanArg->SpS; ampIR=pscanArg->ampIR; ampUV=pscanArg->ampUV;
+
+	nSmeas=pdaqArg->nSam;
+	return manual_scandaq(posA, posB, nSam, ampIR, ampUV, fleadname, nSmeas);
+}
 
 // manually scan and collect IR/UV data and save data into ???scan.txt, ???ir.txt, ???uv.txt, etc.
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas)
@@ -351,12 +379,31 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 	pre_statemain=statemain;
 	statemain=SWN; //3
 
+	bool refModel; // 1 for reference model; 0 for water sample
+
+	struct scanArg *pscanArg;
+
+	if (strstr(fleadname,"ref")==NULL)
+		{//no ref in the filename, not ref model
+			refModel=0;
+			pscanArg=&(configstruct.wtrscan);
+		}
+	else
+	{// find ref in the filename, ref model
+		refModel=1;
+		pscanArg=&(configstruct.refscan);
+	}
+
+	int pkUP, pkLOW;
+	pkLOW=pscanArg->PkRange[0]; pkUP=pscanArg->PkRange[1];
+
 	sprintf(fnamescan, "%sscan", fleadname);
 	sprintf(fnameIR, "%sir", fleadname);
 	sprintf(fnameUV, "%suv", fleadname);
 
 	// 1. scan
-	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, 141, fnamescan)==-1)
+	// daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
+	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
 			daqModule.oPC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
@@ -367,58 +414,111 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 
     // 2. Gaussian alignment
 		int optIR, optUV;
+        double muIR, muUV;
+        double stdIR, stdUV;
+
 		int gfitOK;
 		sprintf(tempStr,"%s.txt", fnamescan);
 		gfitOK=procScanData(tempStr, &optIR, &optUV);
 
-        if (gfitOK==-1)
+        if (gfitOK!=EXIT_SUCCESS)
         {   cout<<"WARN: procScanData() for Gaussian fitting returns WRONG result. Continue main loop."<<endl;
     	goto Label_ReturnFailure;
         }
 
-
-        if (optIR<10 && optUV<10)
-        	{ cout << "WARN: Both peaks of both IR and UV are invalid"<<endl;
-        	  goto Label_ReturnFailure;
+        if (refModel)
+        	{
+        	  currentdatalog.pkIRref=optIR;  currentdatalog.sigmaIRref=INVALIDVALUE;
+        	  currentdatalog.pkUVref=optUV;  currentdatalog.sigmaUVref=INVALIDVALUE;
         	}
-	// Collect UV IR data at the optimal position
-    // 3. measure IR first
-        if (optIR<10)
-        	{   cout<<"make optUV="<<optUV<<"for IR"<<endl;
-        		optIR=optUV;
-        	}
-        if(daqModule.daqIRUV(optIR, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameIR)==-1)
-        {
-        	cout<<"WARN: daqIRUV() for IR ("<<fnameIR<<".txt) fails. Continue main loop."<<endl;
+        else
+        	{
+        	currentdatalog.pkIRwtr=optIR;  	currentdatalog.sigmaIRwtr=INVALIDVALUE;
+        	currentdatalog.pkUVwtr=optUV; 	currentdatalog.sigmaUVwtr=INVALIDVALUE;
+            }
+/*
+        if ( (optIR<pkLOW || optIR>pkUP) && (optUV<pkLOW || optUV>pkUP) )
+        	{ cout << "WARN: Both peaks of IR and UV are invalid. Skip daq"<<endl;
+            if (refModel)
+            	{ currentdatalog.IRref=INVALIDVALUE; currentdatalog.stdIRref=INVALIDVALUE;
+            	  currentdatalog.UVref=INVALIDVALUE; currentdatalog.stdUVref=INVALIDVALUE;}
+            else
+            	{ currentdatalog.IRwtr=INVALIDVALUE; currentdatalog.stdIRwtr=INVALIDVALUE;
+            	  currentdatalog.UVwtr=INVALIDVALUE; currentdatalog.stdUVwtr=INVALIDVALUE;
+            	}
         	goto Label_ReturnFailure;
+        	}
+*/
+
+    // Collect UV IR data at the optimal position
+    // 3. measure IR first
+    	if (refModel)
+		{ currentdatalog.IRref=INVALIDVALUE; currentdatalog.stdIRref=INVALIDVALUE;}
+		else
+		{ currentdatalog.IRwtr=INVALIDVALUE; currentdatalog.stdIRwtr=INVALIDVALUE; }
+
+        if (optIR>=pkLOW && optIR<=pkUP)
+        { // Valid IR peak
+        	if(daqModule.daqIRUV(optIR, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnameIR)==-1)
+             {
+        		cout<<"WARN: daqIRUV() for IR ("<<fnameIR<<".txt) fails. Continue main loop."<<endl;
+        		goto Label_ReturnFailure;
+             }
+
+        	//TODO: Possible bug: If nSmeas is over 5000 in above daqIRUV() call,
+        	//                    an error of segmentation will occur in the following codes
+        	//
+
+        	// TODO: call matlab function calculate mean EIR
+        	sprintf(tempStr,"%s.txt", fnameIR);
+        	procDaqData2(tempStr,&muIR, &muUV, &stdIR, &stdUV);
+
+        	printf("daqIRUV() for IR at MS=%d successes (%s.txt). muIR=%f\r\n", optIR, fnameIR,muIR);
+
+        	if (refModel)
+        	{ currentdatalog.IRref=muIR; currentdatalog.stdIRref=stdIR;	}
+        	else
+        	{ currentdatalog.IRwtr=muIR; currentdatalog.stdIRwtr=stdIR; }
         }
-        // TODO: call matlab function calculate mean EIR
-        double muIR, muUV;
-		sprintf(tempStr,"%s.txt", fnameIR);
-		procDaqData(tempStr,&muIR, &muUV);
-        printf("daqIRUV() for Ir at MS=%d successes (%s.txt). meanIr=%f\r\n", optIR, fnameIR,muIR);
+        else
+        { // Invalid IR peak
+        	printf("WARN: Invalid IR peak %d out of [%d,%d]. Skip daq\r\n",optIR,pkLOW, pkUP);
+        }
+        // end of IR measurement if
 
 
    // 4. measure UV second
-        if (optIR<10)
-                	{   cout<<"make use of optIR="<<optUV<<"for UV"<<endl;
-                		optUV=optIR;
-                	}
+    	if (refModel)
+		{ currentdatalog.UVref=INVALIDVALUE; currentdatalog.stdUVref=INVALIDVALUE;}
+		else
+		{ currentdatalog.UVwtr=INVALIDVALUE; currentdatalog.stdUVwtr=INVALIDVALUE; }
 
-        if(daqModule.daqIRUV(optUV, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, 141, fnameUV)==-1)
-        {
-                	cout<<"WARN: daqIRUV() for UV ("<<fnameUV<<".txt) fails. Continue main loop."<<endl;
+        if (optUV>=pkLOW && optUV<=pkUP)
+        { // Valid UV peak
+          if(daqModule.daqIRUV(optUV, nSmeas, FS_SCAN, ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnameUV)==-1)
+        	{      	cout<<"WARN: daqIRUV() for UV ("<<fnameUV<<".txt) fails. Continue main loop."<<endl;
                 	goto Label_ReturnFailure;
+        	}
+		  sprintf(tempStr,"%s.txt", fnameUV);
+		  // procDaqData(tempStr,&muIR, &muUV);
+		  procDaqData2(tempStr,&muIR, &muUV, &stdIR, &stdUV);
+          printf("daqIRUV() for UV at MS=%d successes (%s.txt). muUV=%f\r\n", optUV, fnameUV, muUV);
+          if (refModel)
+        	{ currentdatalog.UVref=muUV; currentdatalog.stdUVref=stdUV;	}
+          else
+        	{ currentdatalog.UVwtr=muUV;currentdatalog.stdUVwtr=stdUV;}
         }
-		sprintf(tempStr,"%s.txt", fnameUV);
-		procDaqData(tempStr,&muIR, &muUV);
-        printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", optUV, fnameUV, muUV);
+        else
+        { // Invalid UV peak
+        	printf("WARN: Invalid UV peak %d out of [%d,%d]. Skip daq\r\n",optUV, pkLOW, pkUP);
+        }
+
 
   // 5. return
 //Label_ReturnSuccess:
-        cout<<"SUCCESS: Both scan and daq are OK. turn off lights. \r\n";
+        cout<<"SUCCESS: Both scan and daq are OK.\r\n";
         statemain=pre_statemain;
-        return 0;
+        return EXIT_SUCCESS;
 
 
 Label_ReturnFailure:

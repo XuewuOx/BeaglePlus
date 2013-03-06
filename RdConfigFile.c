@@ -17,8 +17,6 @@
 #include "RdConfigFile.h"
 
 
-
-
 int get_config(char *filename, struct config *pconfig)
 {
 //      struct config configstruct;

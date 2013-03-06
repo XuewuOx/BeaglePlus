@@ -14,7 +14,7 @@
 #ifndef RDCONFIGFILE_H_
 #define RDCONFIGFILE_H_
 
-#define CONFIGFILENAME "config.conf"
+#define CONFIGFILENAME "loadmon.conf"
 #define DELIM "="
 #define MAXBUF 1024
 #define LENT2VTABLE 41

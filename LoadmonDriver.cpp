@@ -81,15 +81,15 @@ void LoadmonDriver::initBeagle()
 
 }
 
-int LoadmonDriver::initDriver(char *fconfig)
+int LoadmonDriver::initDriver(char *fileconfig)
 {
 	int uartID1, uartID2;
 
 		initBeagle();
 
-		if (get_config(fconfig, &configstruct)==EXIT_FAILURE)
+		if (get_config(fileconfig, &configstruct)==EXIT_FAILURE)
 		{
-			printf("Reading config file %s failed",fconfig);
+			printf("Reading config file %s failed",fileconfig);
 			return EXIT_FAILURE;
 		}
 		uartID1=omBed.uartopen(configstruct.UARTFile_mBed);
@@ -108,15 +108,15 @@ int LoadmonDriver::initDriver(char *fconfig)
 }
 
 
-int LoadmonDriver::initDriver(char *fconfig, char *uartName_mBed, char *uartName_PC)
+int LoadmonDriver::initDriver(char *fileconfig, char *uartName_mBed, char *uartName_PC)
 {
 	int uartID1, uartID2;
 
 	initBeagle();
 
-	if (get_config(fconfig, &configstruct)==EXIT_FAILURE)
+	if (get_config(fileconfig, &configstruct)==EXIT_FAILURE)
 	{
-		printf("Reading config file %s failed",fconfig);
+		printf("Reading config file %s failed",fileconfig);
 		return EXIT_FAILURE;
 	}
 
@@ -382,6 +382,10 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	 			sprintf(tempStr,"uvt\r\n");
 	else
 	 			sprintf(tempStr,"uvs%02d\r\n",ampUV);
+
+	// printf(" !NOTE!: UV is forced off for debugging!\r\n");
+	// sprintf(tempStr,"uvt\r\n"); // NOTE: let UV off for debugging
+
 	omBed.uartwriteStr(tempStr);
 	printf(tempStr); // PC.uartwriteStr(tempStr);
 	usleep(10000);
@@ -426,16 +430,9 @@ int LoadmonDriver::scanIRUV(int posA, int posB, int nSam, int sFs, int ampIR, in
 {
 	 char tempStr[500];
 	 char fnamescan[20];
-	 time_t t2;
 
-
-
-	struct tm * timeinfo= localtime(&t2);
-	sprintf(tempStr,"[%d/%d/%d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-						timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	printf("%s start UV/IR measurements\n",tempStr);
-	oPC.uartwriteStr(tempStr);
-	oPC.uartwriteStr("\% start UV/IR measurements\n");
+	// printf("start UV/IR measurements\n");
+	// oPC.uartwriteStr("\% start UV/IR measurements\n");
 	// Skip moving motor to origin
 
 	int scanSteps=posB-posA+1;
@@ -519,6 +516,7 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 					timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 		sprintf(temStr, "cp %s %s", fname, fname2);
 		system(temStr);
+		return EXIT_SUCCESS;
 }
 
 

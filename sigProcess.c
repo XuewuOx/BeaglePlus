@@ -52,7 +52,7 @@ int procScanData(char* fname, int* optIR, int* optUV)
 	// PC.uartwriteStr(temStr);
 	 *optIR=msPkIR; // gfIR[0];
 	 *optUV=msPkUV; //gfUV[0];
-	 return 1;
+	 return EXIT_SUCCESS;
 }
 
 int procDaqData(char* fname, double* muIR, double* muUV)
@@ -66,7 +66,7 @@ int procDaqData(char* fname, double* muIR, double* muUV)
             		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
         *muIR=EIR[0];
         *muUV=EUV[0];
-        return 1;
+        return EXIT_SUCCESS;
 }
 
 int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double* stdUV)
@@ -80,7 +80,7 @@ int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double*
          		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
      *muIR=EIR[0]; *stdIR=EIR[1];
      *muUV=EUV[0]; *stdUV=EUV[1];
-     return 1;
+     return EXIT_SUCCESS;
 }
 
 // Test Matlab Code Generation

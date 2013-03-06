@@ -69,6 +69,19 @@ int procDaqData(char* fname, double* muIR, double* muUV)
         return 1;
 }
 
+int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double* stdUV)
+{
+	 double EIR[2], EUV[2];
+     int fsize[2];
+     EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
+     fsize[0]=1; fsize[1]=strlen(fname);
+     meanfile(fname, fsize, EIR, EUV);
+     printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
+         		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
+     *muIR=EIR[0]; *stdIR=EIR[1];
+     *muUV=EUV[0]; *stdUV=EUV[1];
+     return 1;
+}
 
 // Test Matlab Code Generation
 void testMatabCode()

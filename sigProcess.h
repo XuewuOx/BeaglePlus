@@ -14,8 +14,11 @@
 #ifndef SIGPROCESS_H_
 #define SIGPROCESS_H_
 
+#define INVALIDVALUE -9999
+
 void testMatabCode();
 int procScanData(char* fname, int* optIR, int* optUV);
 int procDaqData(char* fname, double* muIR, double* muUV);
+int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double* stdUV);
 
 #endif /* SIGPROCESS_H_ */

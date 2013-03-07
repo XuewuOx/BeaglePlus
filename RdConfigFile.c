@@ -103,7 +103,7 @@ int get_config(char *filename, struct config *pconfig)
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %d %d %f",&pconfig->refscan.posA, &pconfig->refscan.posB,
 						&pconfig->refscan.SpS, &pconfig->refscan.sFs,
 						&pconfig->refscan.ampIR, &pconfig->refscan.gainIR,
-						&pconfig->refscan.ampUV,&pconfig->refscan.ampUV,
+						&pconfig->refscan.ampUV,&pconfig->refscan.gainUV,
 						&pconfig->refscan.apdBV);
 				if (nArg!=9) {
 					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
@@ -116,7 +116,7 @@ int get_config(char *filename, struct config *pconfig)
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %d %d %f",&pconfig->wtrscan.posA, &pconfig->wtrscan.posB,
 						&pconfig->wtrscan.SpS, &pconfig->wtrscan.sFs,
 						&pconfig->wtrscan.ampIR, &pconfig->wtrscan.gainIR,
-						&pconfig->wtrscan.ampUV,&pconfig->wtrscan.ampUV,
+						&pconfig->wtrscan.ampUV,&pconfig->wtrscan.gainUV,
 						&pconfig->wtrscan.apdBV);
 				if (nArg!=9) {
 					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
@@ -127,7 +127,7 @@ int get_config(char *filename, struct config *pconfig)
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %f",
 						&pconfig->refdaq.nSam, &pconfig->refdaq.sFs,
 						&pconfig->refdaq.ampIR, &pconfig->refdaq.gainIR,
-						&pconfig->refdaq.ampUV,&pconfig->refdaq.ampUV,
+						&pconfig->refdaq.ampUV,&pconfig->refdaq.gainUV,
 						&pconfig->refdaq.apdBV);
 				if (nArg!=7) {
 					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
@@ -139,7 +139,7 @@ int get_config(char *filename, struct config *pconfig)
 				nArg=sscanf(cfline, "%d %d %d %d %d %d %f",
 						&pconfig->wtrdaq.nSam, &pconfig->wtrdaq.sFs,
 						&pconfig->wtrdaq.ampIR, &pconfig->wtrdaq.gainIR,
-						&pconfig->wtrdaq.ampUV,&pconfig->wtrdaq.ampUV,
+						&pconfig->wtrdaq.ampUV,&pconfig->wtrdaq.gainUV,
 						&pconfig->wtrdaq.apdBV);
 				if (nArg!=7) {
 					printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
@@ -173,6 +173,22 @@ int get_config(char *filename, struct config *pconfig)
 
 }
 
+
+
+/* Check struct members */
+void check_config(struct config *pconfig)
+{
+	printf(" Check configuration of %s \r\n", CONFIGFILENAME);
+	printf("   refPkRange[low, up]=[%d, %d]",pconfig->refscan.PkRange[0], pconfig->refscan.PkRange[1]);
+	printf("   wtrPkRange[low, up]=[%d, %d]\r\n",pconfig->wtrscan.PkRange[0], pconfig->wtrscan.PkRange[1]);
+	printf("   refscan.ampIR=%d, gainIR=%d, ampUV=%d, gainUV=%d, apdBV=%f\r\n",
+			pconfig->refscan.ampIR, pconfig->refscan.gainIR,
+			pconfig->refscan.ampUV, pconfig->refscan.gainUV, pconfig->refscan.apdBV);
+
+	printf("   wtrscan.ampIR=%d, gainIR=%d, ampUV=%d, gainUV=%d, apdBV=%f\r\n",
+				pconfig->wtrscan.ampIR, pconfig->wtrscan.gainIR,
+				pconfig->wtrscan.ampUV, pconfig->wtrscan.gainUV, pconfig->wtrscan.apdBV);
+}
 
 /*Functions */
 void trim(char *s) /* Remove tabs/spaces/lf/cr  both ends */

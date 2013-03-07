@@ -14,6 +14,7 @@ using namespace std;
 #include <signal.h>
 #include <stdlib.h>
 
+
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -77,12 +78,14 @@ void init_main(char *pNamemBed);
 
 void readTime(int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
 void readTime2(time_t tnow, int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
+void dispTime();
 int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog);
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
 int auto_scandaq(struct scanArg *pscanArg, struct daqArg* pdaqArg, char *fleadname);
 // int daqUVIR(int Fs, int nSamples, int dataIR[][MAXCOL_DATA], int dataUV[][MAXCOL_DATA]);
 
+int getcharTimeout(int sec);
 void setBeagleRTC(void);
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss);
 void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
@@ -103,11 +106,13 @@ int main(int argc, char* argv[]) {
     int returnstate; // a variable returned by a function
     int yy,mm, dd, hh, min, ss;
 
-    cout << "\n!!!Hello World!!!" << endl; // prints !!!Hello World!!!
-    // cout<<"testfunc()="<<testfunc(5)<<endl;
 
-    // Initialise global variables, display time, open UART ports, etc.
+    // Initialise global variables configstruct, open UART ports, etc.
     statemain=INIT; // 0;
+
+	// Set BB's clock
+	setBeagleRTC();
+
 
 	// read configuration iile and  initialise londmon driver
     if (argc<=1)
@@ -123,18 +128,18 @@ int main(int argc, char* argv[]) {
     	return EXIT_FAILURE;
     }
 
-    /* Check struct members */
-	int posA, posB;
-	printf("\r\nposA=%d, posB=%d, SpS=%d, apdBV=%f\r\n", configstruct.refscan.posA, configstruct.refscan.posB,
-		configstruct.refscan.SpS, configstruct.refscan.apdBV);
+    daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
+    // Check configuration
+	dispTime();
+	check_config(&configstruct);
+
+	dispTime();
 	daqModule.selftest();
 	sleep(1);
 
-	// Set BB's clock
-	setBeagleRTC();
+
 
 	// init and test datalog.txt file
-
 	readTime(&yy, &mm, &dd, &hh, &min, &ss);
 	char datafilename[100];
 	sprintf(currentdatalog.nameLogFile,"%sdatalog_%04d%02d%02d.txt",DATAFILEPATH, yy, mm, dd);
@@ -147,26 +152,22 @@ int main(int argc, char* argv[]) {
 	daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
 	appendDataLog(&currentdatalog);
 
-	daqModule.oPC.uartwriteStr("Beagle starts...\r\n");
-    // string tempStr2("dir%d=[%d %d %d %d %d ]");
-    // string strTest("dir02=[0001 0002 0003 0004 0005 ]");
-    // sscanf(strTest.c_str(),"dir%d=[%f %f %f %f %f ]",&n, &ax[0], &ax[1], &ax[2], &ax[3], &ax[4]);
-    // sscanf(strTest.c_str(),tempStr2.c_str(),&n, ax, ax+1, ax+2, ax+3, ax+4);
-    // cout<<"dir"<<n<<"=["<<ax[0]<<ax[1]<<ax[2]<<ax[3]<<ax[4]<<" ]"<<endl;
-
 
 	// Test Matlab Code Generation
-    printf(" Testing file reading & Gaussian fitting\r\n");
+	dispTime();	printf(" Testing file reading & Gaussian fitting\r\n");
 	testMatabCode();
 
+
 	// Assign a handler to close the serial port on Ctrl+C.
+
 	signal (SIGINT, &sigint_handler);
-	printf("Press Ctrl+C to exit the program.\n");
+	dispTime(); printf("Press Ctrl+C to exit the program.\n");
 
 
 
 	statemain=MBEDONLY; // 1
-	daqModule.oPC.uartwriteStr("\r\n  Enter mbed mode by default for controlling mbed manually\r\n");
+	dispTime();
+	daqModule.oPC.uartwriteStr("Enter mbed mode by default for controlling mbed manually\r\n");
 	printf("Enter mbed mode by default for controlling mbed manually\r\n");
 
 	daqModule.oPC.uartwriteStr("  Waiting for commands from USB/RS232 accessport\r\n");
@@ -180,13 +181,18 @@ int main(int argc, char* argv[]) {
 	daqModule.oPC.uartwriteStr("      to switch to Beagle mode for automatic data collection, please type idle followed by ENTER\r\n");
 	daqModule.oPC.uartwriteStr("      to stop program, type quit followed by ENTER. Wait for a few seconds\r\n");
 
+	readTime(&yy, &mm, &dd, &hh, &min, &ss);
+	sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] Main LOOP starts\r\n",yy,mm,dd,hh,min,ss);
+	printf("%s", tempStr);
+	daqModule.oPC.uartwriteStr(tempStr);
+
+
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
 	t1-=60; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
-	printf("main loop starts\r\n");
-	daqModule.oPC.uartwriteStr(" Main loop starts \r\n");
+
 
 while (1)
 {
@@ -403,7 +409,8 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 
 	// 1. scan
 	// daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
-	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
+	// if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
+	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, 141, fnamescan)==-1)
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
 			daqModule.oPC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
@@ -790,44 +797,57 @@ void setBeagleRTC(void)
 {
 	 int year, month ,day, hh, min, ss;
 
-	 daqModule.oPC.uartwriteStr("  Set Beagle's time and date ... ");
-
-	 printf("Do you want to set a new time? (Y/N)\r");
-	 char chgTime;
-	 // getc("%c",&chgTime);
-	 chgTime=getchar();
-	 if (chgTime=='Y' || chgTime=='y')
-	 {	 /* prompt user for date */
-	 	 printf("Enter day/month/year: "); scanf("%d/%d/%d",&day, &month, &year);
-	     printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &min, &ss);
-	     // setBeagleRTC2(year, month, day, hh, min, ss);
-	    setBeagleRTC3(year, month, day, hh, min, ss);
-	 }
-
-	 // read system time
+	 // read Beagle's time
 	 char tempStr[500];
 	 time_t t2;
+	 struct tm * timeinfo;
 
 	 time(&t2);
-	 struct tm * timeinfo= localtime(&t2);
+	 timeinfo= localtime(&t2);
+
+	 readTime(&year, &month, &day, &hh, &min, &ss);
+	 printf("[yyyy/mm/dd hh:mm:ss]\r\n");
+	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] ",year, month,day,hh,min, ss);
+	 cout<<tempStr;
+
+	 printf("Do you want to set a new time? (Y/N)  ");
+	 fflush(stdout);
+	 char chgTime;
+	 chgTime=getcharTimeout(6);
+
+	 if (chgTime=='Y' || chgTime=='y')
+	 {	 /* prompt user for date */
+		 printf("Yes.\r\n");
+	 	 printf("Enter day/month/year: "); scanf("%d/%d/%d",&day, &month, &year);
+	     printf("Enter hour:minute:second "); scanf("%d:%d:%d",&hh, &min, &ss);
+
+	     daqModule.oPC.uartwriteStr("  Set Beagle's time and date ... ");
+	     setBeagleRTC3(year, month, day, hh, min, ss);
+     	 daqModule.oPC.uartwriteStr("  OK!\r\n");
+
+    	 daqModule.oPC.uartwriteStr("  New date & time: ");
+    	 printf("  New date & time: ");
+
+	 }
+	 else
+	 {
+		 daqModule.oPC.uartwriteStr("  Current date & time: ");
+		 printf("  Not change date & time: ");
+	 }
+
+	 // read system time again
+	 time(&t2);
+	 timeinfo= localtime(&t2);
 	 readTime(&year, &month, &day, &hh, &min, &ss);
 	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d]\r\n",year, month,day,hh,min, ss);
-	 cout<<tempStr;
-
-	 sprintf(tempStr,"[%04d/%02d/%02d %02d:%02d:%02d] ",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-				timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
-	 daqModule.oPC.uartwriteStr("  OK! ");
 	 daqModule.oPC.uartwriteStr(tempStr);
-	 daqModule.oPC.uartwriteStr("\r\n");
 	 cout<<tempStr;
-
-
+/*
 	 struct timeval systime;
 	 gettimeofday(&systime, NULL);
 	 char * text_time = ctime(&systime.tv_sec);
 	 printf(text_time);
-
-
+	  */
 }
 
 void setBeagleRTC2(int yy, int mm, int dd, int hh, int min, int ss)
@@ -900,4 +920,38 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss)
 
 }
 
+void dispTime()
+{
+	int yy, mm, dd, hh, min, ss;
+	readTime(&yy, &mm, &dd, &hh, &min, &ss);
+	printf("[%04d/%02d/%02d %02d:%02d:%02d] ",yy, mm,dd,hh,min, ss);
 
+}
+
+
+int getcharTimeout(int sec)
+{
+	fd_set selectset;
+	struct timeval timeout = {10,0}; //timeout of 10 secs by default.
+
+	timeout.tv_sec=sec;
+	timeout.tv_usec=0;
+	int ret;
+	FD_ZERO(&selectset);
+	FD_SET(0,&selectset);
+	ret =  select(1,&selectset,NULL,NULL,&timeout);
+	if(ret == 0)
+	{//timeout
+		return 0;
+	}
+	else if(ret == -1)
+	{ //error
+		return -1;
+	}
+	else
+	{  // stdin has data, read it
+	   // (we know stdin is readable, since we only asked for read events
+	   //and stdin is the only fd in our select set.
+		return getchar();
+	}
+}

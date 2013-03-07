@@ -64,5 +64,6 @@ struct config
 int get_config(char *filename, struct config *pconfig);
 void trim(char *s);  /* Remove tabs/spaces/lf/cr  both ends */
 int readT2VTable(char *cfline, struct config *pconfig, int lineID);
+void check_config(struct config *pconfig);
 
 #endif /* RDCONFIGFILE_H_ */

@@ -34,6 +34,7 @@
  */
 struct struct_DataLog
 {
+	unsigned int yy, mm, dd;
    unsigned int hour, min, sec;
    float IRnorm, UVnorm;
    float IRref, UVref;

@@ -126,8 +126,8 @@ void testMatabCode()
       // gfIR[0]=gfit_rdfile(fname, fsize); // gfit_SingleGfit_OK, .\work_readfile\readfile_v4.m
      gfit_rdfile(fname, fsize, gfIR, gfUV);
 
-	 printf("gfIR=[%f, %f, %f]\r\n", gfIR[0],gfIR[1],gfIR[2]);
-	 printf("gfUV=[%f, %f, %f]\r\n", gfUV[0],gfUV[1],gfUV[2]);
+	 // printf("gfIR=[%f, %f, %f]\r\n", gfIR[0],gfIR[1],gfIR[2]);
+	 // printf("gfUV=[%f, %f, %f]\r\n", gfUV[0],gfUV[1],gfUV[2]);
 	 if (gfIR[2]<0 && gfUV[2]<0)
 	 {
 		printf("  reading \"%s\" or the Gaussian fitting failed.returned value =%f\n",fname,gfIR[0]);
@@ -136,7 +136,7 @@ void testMatabCode()
      int pkIR, pkUV;
 
      pkIR=round(gfIR[0]); pkUV=round(gfUV[0]);
-     printf("  Gaussian fitting at \"%s\" successes. optIR=%d, optUV=%d\n",fname,pkIR, pkUV);
+     printf("   [optIR=%d, optUV=%d]. Gaussian fitting at \"%s\" OK. \n",pkIR, pkUV, fname);
 
 
  	char *fnameIR="refir.txt";
@@ -146,7 +146,7 @@ void testMatabCode()
     dUV[0]=-4; dUV[1]=-4;
 
     meanfile(fname, fsize, dIR, dUV);
-    printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
-    		fnameIR, dIR[0], dIR[1], dUV[0], dUV[1]);
+    printf("   IR[mu, std]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]. Averaging at \"%s\" OK. \r\n",
+    		dIR[0], dIR[1], dUV[0], dUV[1], fnameIR);
 
 }

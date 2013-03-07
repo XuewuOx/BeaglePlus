@@ -63,22 +63,21 @@ void LoadmonDriver::initBeagle()
 	time_t rawt = time(NULL); // /* Seconds since the Epoch. 1970-01-01  */
 	struct tm * timeinfo;
 
+	time(&rawt);
+	timeinfo=localtime(&rawt);
 
    printf("Enter  $ sudo /home/ubuntu/restore_DHCPconsole\r\n");
    printf("     to reboot the Beagle with DHCP and console over ttyO2\r\n");
    printf("Enter  $ sudo /home/ubuntu/restore_IP10.2.1.3ttyO2\r\n");
    printf("     to reboot the Beagle with IP=10.2.1.3 and without console over ttyO2\r\n");
 
+
 	printf("\n=================================================\n");
-	printf("    Loadmon Beagle main() starts at \n");
-	/* get current timeinfo and modify it to the user's choice */
-	time(&rawt);
-	timeinfo= localtime(&rawt);
-	printf("   (Beagle Time) %d/%02d/%02d %02d:%02d:%02d\n",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+	printf("    Loadmon Beagle starts\n");
 	printf("=================================================\n");
-
-
+	// printf("[yyy/mm/dd hh:mm:ss]\r\n");
+	printf("[%d/%02d/%02d %02d:%02d:%02d]\r\n",timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 }
 
 int LoadmonDriver::initDriver(char *fileconfig)
@@ -159,6 +158,7 @@ int LoadmonDriver::selftest()
 		usleep(1000);
 
 		oPC.uartwriteStr("  Testing the motor ...");
+		printf("  Testing the motor ...");
 		// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 		// printf("setm 1 0 30 100 1\r\n");
 		// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
@@ -166,7 +166,7 @@ int LoadmonDriver::selftest()
 
 		// while (mBed.readline()==0){}
 		omBed.flushrxbuf();
-		printf((char *)"move -s 1 100\r\n");
+		DEBUGF((char *)"move -s 1 100\r\n");
 		omBed.uartwriteStr((char *)"move -s 1 100\r\n");
 		usleep(1000);
 		// while (mBed.readline()==0){}
@@ -177,7 +177,7 @@ int LoadmonDriver::selftest()
 			}
 
 		oPC.uartwriteStr((char *)" ... ");
-		printf("move -s 1 -100\r\n");
+		DEBUGF("move -s 1 -100\r\n");
 		omBed.uartwriteStr((char *)"move -s 1 -100\r\n");
 		usleep(1000);
 		while (omBed.readline()==0){}
@@ -186,6 +186,7 @@ int LoadmonDriver::selftest()
 		sleep(1);
 		omBed.readline();
 		oPC.uartwriteStr(" OK\r\n");
+		printf(" OK\r\n");
 		return EXIT_SUCCESS;
 }
 
@@ -378,10 +379,12 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 {
 	 char tempStr[500];
 
-	 if (ampUV<0)
+	if (ampUV<=0)
 	 			sprintf(tempStr,"uvt\r\n");
+	else if (ampUV>=100)
+		sprintf(tempStr,"uvs00\r\n");
 	else
-	 			sprintf(tempStr,"uvs%02d\r\n",ampUV);
+	 	sprintf(tempStr,"uvs%02d\r\n",ampUV);
 
 	// printf(" !NOTE!: UV is forced off for debugging!\r\n");
 	// sprintf(tempStr,"uvt\r\n"); // NOTE: let UV off for debugging
@@ -392,10 +395,12 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	omBed.readlineTimeOut(1000);
 	//omBed.readline();
 
-	if (ampIR<0)
-	 				sprintf(tempStr,"irt\r\n");
+	if (ampIR<=0)
+	 	sprintf(tempStr,"irt\r\n");
+	else if (ampIR>=100)
+		sprintf(tempStr,"irs00\r\n");
 	else
-	 				sprintf(tempStr,"irs%02d\r\n",ampIR);
+	 	sprintf(tempStr,"irs%02d\r\n",ampIR);
 
 	omBed.uartwriteStr(tempStr);
 	printf(tempStr); // PC.uartwriteStr(tempStr);
@@ -512,8 +517,9 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 		printf("save data to %s OK\n", fname);
 
 	    // backup the data file
+
 		sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamescan, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-					timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+					timeinfo->tm_mday,currentdatalog.hour, currentdatalog.min, currentdatalog.sec);
 		sprintf(temStr, "cp %s %s", fname, fname2);
 		system(temStr);
 		return EXIT_SUCCESS;
@@ -598,8 +604,8 @@ int LoadmonDriver::daqIRUVcore(int posA, int nSamples, int Fs, char * fleadnamem
     	char cmdline[150];
     	time(&tnow);
     	timeinfo= localtime(&tnow);
-    	sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamemeas,timeinfo->tm_year+1900, timeinfo->tm_mon+1,
-    	    	    			timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
+    	sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamemeas, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+    						timeinfo->tm_mday,currentdatalog.hour, currentdatalog.min, currentdatalog.sec);
     	sprintf(cmdline,"cp %s %s",fname, fname2);
     	system(cmdline);
     	printf("backup data in %s to %s OK\n", fname, fname2);

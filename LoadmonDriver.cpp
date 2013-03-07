@@ -518,7 +518,7 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 
 	    // backup the data file
 
-		sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamescan, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+		sprintf(fname2,"%s%s_%04d%02d%02d_%02dh%02dm%02ds.txt",DUMPPATH,fleadnamescan, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
 					timeinfo->tm_mday,currentdatalog.hour, currentdatalog.min, currentdatalog.sec);
 		sprintf(temStr, "cp %s %s", fname, fname2);
 		system(temStr);
@@ -604,7 +604,7 @@ int LoadmonDriver::daqIRUVcore(int posA, int nSamples, int Fs, char * fleadnamem
     	char cmdline[150];
     	time(&tnow);
     	timeinfo= localtime(&tnow);
-    	sprintf(fname2,"%s_%04d%02d%02d_%02dh%02dm%02ds.txt",fleadnamemeas, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
+    	sprintf(fname2,"%s%s_%04d%02d%02d_%02dh%02dm%02ds.txt",DUMPPATH, fleadnamemeas, timeinfo->tm_year+1900, timeinfo->tm_mon+1,
     						timeinfo->tm_mday,currentdatalog.hour, currentdatalog.min, currentdatalog.sec);
     	sprintf(cmdline,"cp %s %s",fname, fname2);
     	system(cmdline);

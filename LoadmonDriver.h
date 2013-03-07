@@ -22,6 +22,8 @@
 #endif
 */
 
+#define DUMPPATH "./dump/"
+
 #ifndef TRUE
 # define TRUE 1
 #endif

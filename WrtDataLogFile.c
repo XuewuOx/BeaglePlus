@@ -83,7 +83,7 @@ int appendDataLog(struct struct_DataLog *pDataLog)
 	// printf("appendDatalog: %02d  %02d  %02d",pdq->hour,pd->min,pd->sec);
 	// printf("\t%08.3f\t%08.3f",pd->IRnorm, pd->UVnorm);
 	fprintf(fp, " %02d\t%02d\t%02d",pd->hour,pd->min,pd->sec);
-	fprintf(fp, "\t%08.3f\t%08.3f",pd->IRnorm, pd->UVnorm);
+	fprintf(fp, "\t%08.5f\t%08.5f",pd->IRnorm, pd->UVnorm);
 	fprintf(fp, "\t%08.3f\t%08.3f",pd->SS,pd->COD);
 	fprintf(fp, "\t%08.3f\t%08.3f\t%04d\t%04d", pd->IRref, pd->UVref, pd->pkIRref, pd->pkUVref);
 	fprintf(fp, "\t%08.3f\t%08.3f\t%04d\t%04d", pd->IRwtr, pd->UVwtr, pd->pkIRwtr, pd->pkUVwtr);

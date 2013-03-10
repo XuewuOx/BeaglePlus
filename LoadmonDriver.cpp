@@ -12,6 +12,8 @@
 #include <iostream>
 using namespace std;
 
+
+
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
 
 
@@ -327,8 +329,14 @@ int LoadmonDriver::moveMotor2Switch()
 	motorLED.uSW=0;
 	omBed.flushrxbuf();
 	while(motorLED.uSW==0)
-	{	omBed.uartwriteStr("move -s 1 -2000\r\n");
+	{
+#if uSW_POSITION == uSW_OpticRef
+		omBed.uartwriteStr("move -s 1 2000\r\n");
+		oPC.uartwriteStr("\% move -s 1 2000\r\n");
+#else
+		omBed.uartwriteStr("move -s 1 -2000\r\n");
 		oPC.uartwriteStr("\% move -s 1 -2000\r\n");
+#endif
 		do{
 			nChars=omBed.readline();
 			time(&t2);

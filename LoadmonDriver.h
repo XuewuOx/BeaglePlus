@@ -24,12 +24,22 @@
 
 #define DUMPPATH "./dump/"
 
+
+#define uSW_OpticRef 1
+#define uSW_WaterMes 0
+
+#define uSW_POSITION  uSW_OpticRef
+// uSW_POSITION   1 when the uSW is at the optic reference end
+//                 0 when the uSW at the water measurement end
+
+
 #ifndef TRUE
 # define TRUE 1
 #endif
 #ifndef FALSE
 # define FALSE 0
 #endif
+
 
 class LoadmonDriver {
 

@@ -92,7 +92,7 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
 #define UARTNAME_PC "/dev/ttyO2"
 #define DATAFILEPATH "./data/"
-#define DAQINTERVAL_s 60
+#define DAQINTERVAL_s 120
 
 int main(int argc, char* argv[]) {
 
@@ -190,7 +190,7 @@ int main(int argc, char* argv[]) {
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
-	t1-=60; // for debug purpose: start first DAQ immediately
+	t1-=DAQINTERVAL_s; // for debug purpose: start first DAQ immediately
 	nDAQ=0;
 
 
@@ -224,7 +224,7 @@ while (1)
 			 // manual_scandaq(1750, 1900,10,25,00,"ref", 2000); // for debug
 
 			 // water scanning and daq
-			 // auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
+			 auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
 
 			 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
 			 // printf("skip %d-th DAQ for debugging \r\n\r\n", nDAQ);
@@ -332,6 +332,18 @@ int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 	 dn=timeinfo->tm_mday;	 hhnow=timeinfo->tm_hour;
 	 minnow=timeinfo->tm_min;	 ssnow=timeinfo->tm_sec;
 
+	 // calculate IRnorm and UVnorm
+	 if(pDataLog->IRref!=INVALIDVALUE && pDataLog->IRref!=0 && pDataLog->IRwtr!=INVALIDVALUE && pDataLog->IRwtr!=0)
+		 pDataLog->IRnorm=pDataLog->IRwtr/pDataLog->IRref;
+	 else
+		 pDataLog->IRnorm=INVALIDVALUE;
+
+	 if(pDataLog->UVref!=INVALIDVALUE && pDataLog->UVref!=0 && pDataLog->UVwtr!=INVALIDVALUE && pDataLog->UVwtr!=0)
+	 		 pDataLog->UVnorm=pDataLog->UVwtr/pDataLog->UVref;
+	 	 else
+	 		 pDataLog->UVnorm=INVALIDVALUE;
+
+
 	// if (hhnow!=hh0)
 	if(minnow!=min0)
 	 { //different hour, close file to save data and reopen it
@@ -409,8 +421,8 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 
 	// 1. scan
 	// daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
-	// if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
-	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, 141, fnamescan)==-1)
+	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
+	// if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, 141, fnamescan)==-1)
 		{ // something wrong
 			cout<<"WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop."<<endl;
 			daqModule.oPC.uartwriteStr("WARN: SOMTHING WRONG in executing daqBySWN(). Skip and continue main loop.\r\n");
@@ -629,8 +641,14 @@ void process_UART(int *pstatemain)
 					return;
 				}
 			cout<<"daqModule.moveMotor2Switch OK."<<endl;
-			daqModule.omBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-			DEBUGF("BB->mBed: setm 1 0 0 100 1\r\n");
+
+#if uSW_POSITION == uSW_OpticRef
+		daqModule.omBed.uartwriteStr("setm 1 0 1920 100 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 1920 100 1\r\n");
+#else
+		daqModule.omBed.uartwriteStr("setm 1 0 0 100 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 0 100 1\r\n");
+#endif
 			usleep(10000);
 			daqModule.omBed.readline();
 			*pstatemain=pre_statemain;
@@ -731,15 +749,18 @@ void process_UART(int *pstatemain)
 // Closes the port, resets the terminal, and exits the program.
 
 void  sigint_handler(int sig)
-{   printf("\n======================================================\n");
+{
+	daqModule.sourceOFF();
+	closeDataLogFile(currentdatalog.handleLogFile);
+	daqModule.omBed.uartclose();
+	daqModule.oPC.uartclose();
+
+	printf("\n======================================================\n");
 	printf("Please remember restore file /etc/init/ttyO2.conf \n");
 	printf("   $ sudo cp ttyO2.conf.save ttyO2.conf\n");
 	printf("======================================================\n");
 	printf("GOOD LUCK\n\n");
 
-	daqModule.omBed.uartclose();
-	daqModule.oPC.uartclose();
-	closeDataLogFile(currentdatalog.handleLogFile);
 	exit (sig);
 }
 
@@ -813,7 +834,7 @@ void setBeagleRTC(void)
 	 printf("Do you want to set a new time? (Y/N)  ");
 	 fflush(stdout);
 	 char chgTime;
-	 chgTime=getcharTimeout(6);
+	 chgTime=getcharTimeout(10);
 
 	 if (chgTime=='Y' || chgTime=='y')
 	 {	 /* prompt user for date */
@@ -952,6 +973,9 @@ int getcharTimeout(int sec)
 	{  // stdin has data, read it
 	   // (we know stdin is readable, since we only asked for read events
 	   //and stdin is the only fd in our select set.
+		// char charIn;
+		// scanf("%c",&charIn);
+		// return charIn;
 		return getchar();
 	}
 }

@@ -82,6 +82,35 @@ void LoadmonDriver::initBeagle()
 		    timeinfo->tm_mday,timeinfo->tm_hour, timeinfo->tm_min, timeinfo->tm_sec);
 }
 
+void LoadmonDriver::init_t2apdbv()
+{
+	float tempt;
+	float intergrid;
+
+	t2apdbv.tempFiltered=20; // 20 degree C
+	t2apdbv.ind_now=20; // ind for 20 degree
+	t2apdbv.ind_last=20; // ind for 20 degree
+
+	// t2apdbv.tempFiltered
+	tempt=readTemperature();
+	if (tempt<configstruct.T2VTable[0][0] || tempt>configstruct.T2VTable[0][LENT2VTABLE])
+			return;
+
+	intergrid=abs(configstruct.T2VTable[0][1]-configstruct.T2VTable[0][0])/2;
+	for (int i=0; i<LENT2VTABLE;i++)
+		{
+			if (abs(tempt-configstruct.T2VTable[0][i])<=intergrid)
+			{
+				printf("T=%7.2fdegC, V=%7.2fv\r\n", tempt, configstruct.T2VTable[1][i]);
+				t2apdbv.ind_now=i;
+				t2apdbv.ind_last=i;
+				t2apdbv.tempFiltered=tempt;
+				break;
+			}
+		}
+		return;
+}
+
 int LoadmonDriver::initDriver(char *fileconfig)
 {
 	int uartID1, uartID2;
@@ -150,6 +179,9 @@ int LoadmonDriver::initDriver(char *fconfig, int uartID_mBed, int uartID_PC)
 
 	omBed.uartID=uartID_mBed;
 	oPC.uartID=uartID_PC;
+	strcpy(configstruct.UARTFile_mBed, "User specified ID");
+	strcpy(configstruct.UARTFile_PC, "User specified ID");
+
 	return EXIT_SUCCESS;
 
 }
@@ -211,16 +243,21 @@ float LoadmonDriver::readTemperature()
     omBed.uartwriteStr("rdtemp\r\n");
 	if (omBed.readlineTimeOut(30000)<=0)
 	{  // no response from mbed is received
-		return -999.9;
+		return t2apdbv.tempFiltered;
 	}
 	// printf("received %s", omBed.rxbufptr);
 	if (strlen(omBed.rxbufptr)>100)
 	{
-		return -999.9;
+		return t2apdbv.tempFiltered;
 	}
 	pStr = strstr((char *)omBed.rxbufptr,"temperature=");
 	sscanf(pStr, "temperature=%f\r\n", &temp);
     // cout<<"get tempearture="<<temp<<endl;
+	if (temp<-45 || temp >100)
+	{
+		return t2apdbv.tempFiltered;
+	}
+	temp=0.1*t2apdbv.tempFiltered+0.9*temp;
 	return temp;
 }
 
@@ -266,25 +303,9 @@ int LoadmonDriver::setAPDBV(float apdbv, int *aomv)
 
 int LoadmonDriver::readTsetV()
 {
-	float temperature;
-	float IntervalTgrid;
-	int i;
-
-	temperature=readTemperature();
-	if (temperature<configstruct.T2VTable[0][0] || temperature>configstruct.T2VTable[0][LENT2VTABLE])
-		return -1;
-
-	IntervalTgrid=abs(configstruct.T2VTable[0][1]-configstruct.T2VTable[0][0])/2;
-	for (i=0; i<LENT2VTABLE;i++)
-	{
-		if (abs(temperature-configstruct.T2VTable[0][i])<=IntervalTgrid)
-		{
-			printf("T=%7.2fdegC, V=%7.2fv\r\n", temperature, configstruct.T2VTable[1][i]);
-			setAPDBV(configstruct.T2VTable[1][i]);
-			return EXIT_SUCCESS;
-		}
-	}
-	return -1;
+	float temperature, apdbv;
+	int aomv;
+	return readTsetV(&temperature, &apdbv, &aomv);
 }
 
 int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
@@ -293,10 +314,13 @@ int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
 	// float temp2, bv2;
 	int i;
 
-	*tempDeg=readTemperature();
+
+	t2apdbv.tempFiltered=readTemperature();
+	*tempDeg=t2apdbv.tempFiltered;
+
 	// printf("temp2=%f\r\n",temp2);
 	if (*tempDeg<configstruct.T2VTable[0][0] || *tempDeg>configstruct.T2VTable[0][LENT2VTABLE])
-		return -1;
+		return EXIT_FAILURE;
 
 	IntervalTgrid=abs(configstruct.T2VTable[0][1]-configstruct.T2VTable[0][0])/2;
 	for (i=0; i<LENT2VTABLE;i++)
@@ -304,9 +328,23 @@ int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
 		if (abs(*tempDeg-configstruct.T2VTable[0][i])<=IntervalTgrid)
 		{
 			// printf("T=%7.2fdegC, V=%7.2fv\r\n", temp2, configstruct.T2VTable[1][i]);
-			*apdbv=configstruct.T2VTable[1][i];
-			setAPDBV(*apdbv, aomv);
-			// *apdbv=bv2;
+			t2apdbv.ind_now=i;
+			if (t2apdbv.ind_now == t2apdbv.ind_last)
+			{  // same temperature range, do nothing, not update aomv
+				// *apdbv=configstruct.T2VTable[1][i];
+				// setAPDBV(configstruct.T2VTable[1][i]); // for debug and update amov
+			}
+			else
+			{
+				float tdiff=*tempDeg-configstruct.T2VTable[0][t2apdbv.ind_last];
+				if (abs(tdiff)>=0.6*IntervalTgrid)
+				{ // temperature has changed large enough, update APDbv
+					t2apdbv.ind_last=i;
+					*apdbv=configstruct.T2VTable[1][i];
+					setAPDBV(*apdbv, aomv);
+
+				}
+			}
 			return EXIT_SUCCESS;
 		}
 	}
@@ -322,7 +360,7 @@ int LoadmonDriver::moveMotor2Switch()
 	double Upbound_secs;
     bool timeover;
 
-    Upbound_secs=30;
+    Upbound_secs=100;
     timeover=0;
 	time(&t1);
 	cout<<"% move motor to switch position"<<endl;
@@ -481,7 +519,7 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 		sprintf(temStr,"a2d s %d %d\r\n", sFs, 0);
 	    omBed.uartwriteStr(temStr);
 		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
-		ttimeout=nSperS*abs(nDataSteps_a2b)*(2.0*1000*1/sFs+1)+10*3000+40000; // assume Fs Hz sampling rate
+		ttimeout=nSperS*abs(nDataSteps_a2b)*(2.0*1000*1/sFs+1)+60*3000+40000; // assume Fs Hz sampling rate
 												// 50 ms for sending each data via UART
 		                                        // motor spd: 100 steps per second
 		                                        // maximum 3000 steps

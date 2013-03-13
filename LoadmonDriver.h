@@ -40,8 +40,17 @@
 # define FALSE 0
 #endif
 
+struct STRUCT_Temp2APDbv
+{
+	float tempFiltered; // temperature after smoothing
+	unsigned int ind_now; // current index of configstruct.T2VTable[k][ind_now], where k=0,1 for temperature and APDbv respectively
+	unsigned int ind_last; // last index of configstruct.T2VTable[k][ind_last],#
+};
 
 class LoadmonDriver {
+
+private:
+	struct STRUCT_Temp2APDbv t2apdbv;
 
 public:
 	uartBeagle *pmBed;//="mBed";//((char *)"mBed"); // ("mBed");
@@ -82,6 +91,7 @@ public:
 
 private:
 	void initBeagle();
+	void init_t2apdbv();
 	int init_uarts(int uartID_mBed, int uartID_PC);
 	int init_uarts(char *uartName_mBed, char *uartName_PC);
 	void finish_uarts();

@@ -76,11 +76,25 @@ int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double*
      EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
      fsize[0]=1; fsize[1]=strlen(fname);
      meanfile(fname, fsize, EIR, EUV);
-     printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
+     if (EIR[0]<0 && EIR[1]<0)
+     {
+    	 if (EIR[0]==-1)
+    		 printf("ERROR: failed to open data file %s\r\n", fname);
+    	 else if (EIR[0]==-2)
+    		 printf("ERROR: Gaussian fitting over %s failed. \r\n", fname);
+
+    	  *muIR=EIR[0]; *stdIR=EIR[1];
+    	  *muUV=EUV[0]; *stdUV=EUV[1];
+    	  return EXIT_FAILURE;
+     }
+     else
+     {
+    	 printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
          		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
-     *muIR=EIR[0]; *stdIR=EIR[1];
-     *muUV=EUV[0]; *stdUV=EUV[1];
-     return EXIT_SUCCESS;
+    	 *muIR=EIR[0]; *stdIR=EIR[1];
+    	 *muUV=EUV[0]; *stdUV=EUV[1];
+    	 return EXIT_SUCCESS;
+     }
 }
 
 // Test Matlab Code Generation
@@ -115,7 +129,7 @@ void testMatabCode()
 	// test codes for gfit_rdfile
 	// char *fname="wtrscan.txt";
 	//  char *fname="refscan_20130205_16h42m02s.txt";
-	char *fname="Large_refscan.txt";
+	char *fname="./data/testfiles/Large_refscan.txt";
 	//  char *fname="refscan.txt";
 	  int fsize[2];
 	  fsize[0]=1; fsize[1]=strlen(fname);
@@ -139,13 +153,14 @@ void testMatabCode()
      printf("   [optIR=%d, optUV=%d]. Gaussian fitting at \"%s\" OK. \n",pkIR, pkUV, fname);
 
 
- 	char *fnameIR="refir.txt";
+ 	// char *fnameIR="./data/testfiles/refir.txt";
+     char *fnameIR="./data/testfiles/refir_test4.txt";
 	  fsize[0]=1; fsize[1]=strlen(fnameIR);
 	  double dIR[2], dUV[2];
     dIR[0]=-3; dIR[1]=-3;
     dUV[0]=-4; dUV[1]=-4;
 
-    meanfile(fname, fsize, dIR, dUV);
+    meanfile(fnameIR, fsize, dIR, dUV);
     printf("   IR[mu, std]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]. Averaging at \"%s\" OK. \r\n",
     		dIR[0], dIR[1], dUV[0], dUV[1], fnameIR);
 

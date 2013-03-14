@@ -16,9 +16,11 @@ using namespace std;
 
 #define round(x) ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
 
-
-#include "RdConfigFile.h"
-#include "WrtDataLogFile.h"
+// extern "C"
+// {
+	#include "RdConfigFile.h"
+	#include "WrtDataLogFile.h"
+//}
 
 struct config configstruct;
 struct struct_DataLog currentdatalog;
@@ -132,8 +134,10 @@ int LoadmonDriver::initDriver(char *fileconfig)
 
 			if (uartID1==-1 || uartID2==-1)
 				return -1;
-			else
-			    return EXIT_SUCCESS;
+		lightIsOFF=FALSE; // assume light is ON for safety
+		sourceOFF();
+
+		return EXIT_SUCCESS;
 
 }
 
@@ -162,8 +166,10 @@ int LoadmonDriver::initDriver(char *fileconfig, char *uartName_mBed, char *uartN
 		cout<<"  UART port"<<oPC.portName<<" (uartID="<<oPC.uartID<<") OK"<<endl;
 
 	if (uartID1==-1 || uartID2==-1)
-		return -1;
-	else
+	{	return -1;}
+
+	lightIsOFF=FALSE; // assume light is ON for safety
+	sourceOFF();
 	    return EXIT_SUCCESS;
 
 }
@@ -182,6 +188,8 @@ int LoadmonDriver::initDriver(char *fconfig, int uartID_mBed, int uartID_PC)
 	strcpy(configstruct.UARTFile_mBed, "User specified ID");
 	strcpy(configstruct.UARTFile_PC, "User specified ID");
 
+	lightIsOFF=FALSE; // assume light is ON for safety
+	sourceOFF();
 	return EXIT_SUCCESS;
 
 }
@@ -191,8 +199,8 @@ int LoadmonDriver::selftest()
 	// PC.uartwriteStr("resetmbed\r\n");
 		usleep(1000);
 
-		oPC.uartwriteStr("  Testing the motor ...");
-		printf("  Testing the motor ...");
+		oPC.uartwriteStr("  Testing the motor +/- 26 steps ...");
+		printf("  Testing the motor +/- 26 steps ... ");
 		// PC.uartwriteStr("% setm 1 0 30 100 1\r\n");
 		// printf("setm 1 0 30 100 1\r\n");
 		// mBed.uartwriteStr("setm 1 0 30 100 1\r\n");
@@ -200,8 +208,8 @@ int LoadmonDriver::selftest()
 
 		// while (mBed.readline()==0){}
 		omBed.flushrxbuf();
-		DEBUGF((char *)"move -s 1 100\r\n");
-		omBed.uartwriteStr((char *)"move -s 1 100\r\n");
+		DEBUGF((char *)"move -s 1 26\r\n");
+		omBed.uartwriteStr((char *)"move -s 1 26\r\n");
 		usleep(1000);
 		// while (mBed.readline()==0){}
 		if (omBed.readlineTimeOut(100000)==-1)
@@ -211,8 +219,8 @@ int LoadmonDriver::selftest()
 			}
 
 		oPC.uartwriteStr((char *)" ... ");
-		DEBUGF("move -s 1 -100\r\n");
-		omBed.uartwriteStr((char *)"move -s 1 -100\r\n");
+		DEBUGF("move -s 1 -26\r\n");
+		omBed.uartwriteStr((char *)"move -s 1 -26\r\n");
 		usleep(1000);
 		while (omBed.readline()==0){}
 		// sleep one second and readline to clear the rx buffer
@@ -413,18 +421,33 @@ int LoadmonDriver::moveMotor2Switch()
 
 void LoadmonDriver::sourceOFF()
 {
+
+#ifdef UVIRALWAYSON
+	printf("IR and UV are set always ON \r\n");
+	return;
+#else
 	omBed.uartwriteStr("irt\r\n");
 	printf("irt\r\n"); // PC.uartwriteStr("\% irt\r\n");
 	omBed.uartwriteStr("uvt\r\n");
 	printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
 	printf("IR and UV are off \r\n");
+	lightIsOFF=TRUE;
+#endif
 
 }
 
 void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float apdBias)
 {
-	 char tempStr[500];
 
+	char tempStr[500];
+
+#ifdef UVIRALWAYSON
+	if (lightIsOFF==FALSE)
+		{// light has been ON
+		  return;}
+#endif
+	// switch ON light source
+	lightIsOFF=FALSE;
 	if (ampUV<=0)
 	 			sprintf(tempStr,"uvt\r\n");
 	else if (ampUV>=100)
@@ -432,8 +455,10 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	else
 	 	sprintf(tempStr,"uvs%02d\r\n",ampUV);
 
-	// printf(" !NOTE!: UV is forced off for debugging!\r\n");
-	// sprintf(tempStr,"uvt\r\n"); // NOTE: let UV off for debugging
+#ifdef UVALWAYSOFF
+	printf(" !NOTE!: UV is forced off for debugging!\r\n");
+	sprintf(tempStr,"uvt\r\n"); // NOTE: let UV off for debugging
+#endif
 
 	omBed.uartwriteStr(tempStr);
 	printf(tempStr); // PC.uartwriteStr(tempStr);

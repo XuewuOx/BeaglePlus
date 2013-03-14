@@ -26,11 +26,13 @@ using namespace std;
 
 #include "uartBeagle.h"
 #include "LoadmonDriver.h"
-#include "sigProcess.h"
 // #include "test.h"
 
-#include "RdConfigFile.h"
-#include "WrtDataLogFile.h"
+// extern "C" {
+	#include "sigProcess.h"
+	#include "RdConfigFile.h"
+	#include "WrtDataLogFile.h"
+//}
 
 extern struct config configstruct;
 extern struct struct_DataLog currentdatalog;
@@ -79,7 +81,7 @@ void init_main(char *pNamemBed);
 void readTime(int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
 void readTime2(time_t tnow, int *yy, int *mm, int *dd, int *hh, int *min, int *ss);
 void dispTime();
-int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog);
+void recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog);
 
 int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fleadname, int nSmeas);
 int auto_scandaq(struct scanArg *pscanArg, struct daqArg* pdaqArg, char *fleadname);
@@ -92,7 +94,7 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
 #define UARTNAME_PC "/dev/ttyO2"
 #define DATAFILEPATH "./data/"
-#define DAQINTERVAL_s 120
+#define DAQINTERVAL_s 60
 
 int main(int argc, char* argv[]) {
 
@@ -216,22 +218,54 @@ while (1)
 			printf("%s", tempStr);
 			daqModule.oPC.uartwriteStr(tempStr);
 			 // collect data
+
+			int optIR0=currentdatalog.pkIRref;
+			 float apdBV0=currentdatalog.apdbv;
+			 int aomv0=currentdatalog.aomv;
 			 initDataLog(&currentdatalog, hh, min, ss);
+			 currentdatalog.pkIRref=optIR0;
+			 currentdatalog.apdbv=apdBV0;
+			 currentdatalog.aomv=aomv0;
+
 			 daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
 
+
 			 //reference scanning and daq
-			 auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), "ref");
+			 // auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), "ref");
 			 // manual_scandaq(1750, 1900,10,25,00,"ref", 2000); // for debug
 
 			 // water scanning and daq
-			 auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
+			 // auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
 
-			 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
+			 //===================================================
+			 // reference daq only
+			 printf("currentdatalog.pkIRref=%d\r\n", currentdatalog.pkIRref);
+				if(daqModule.daqIRUV(currentdatalog.pkIRref, 2000, FS_SCAN,
+						    configstruct.refdaq.ampIR, configstruct.refdaq.gainIR,
+						    configstruct.refdaq.ampUV, configstruct.refdaq.gainUV,
+						    configstruct.refdaq.apdBV,"refir")==-1)
+				{
+							cout<<"WARN: daqIRUV() for refir.txt fails. Continue main loop."<<endl;
+			   		   		continue;
+				}
+				double muIR, muUV, stdIR, stdUV;
+				procDaqData2("refir.txt",&muIR, &muUV, &stdIR, &stdUV);
+
+				printf("daqIRUV() for IR at MS=%d successes (%s.txt). meanIR=%f, stdIR=%f\r\n",
+						currentdatalog.pkIRref, "refir", muIR, stdIR);
+	        	currentdatalog.IRref=muIR; currentdatalog.stdIRref=stdIR;
+	        	currentdatalog.UVref=muUV; currentdatalog.stdUVref=stdUV;
+	        	//================================================
+
+
+				 // record data
+				 recordData(t1, t2,&currentdatalog);
+				 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
+
 			 // printf("skip %d-th DAQ for debugging \r\n\r\n", nDAQ);
 			 // statemain=DAQ; // to start data acquisition
 
-			 // record data
-			 recordData(t1, t2,&currentdatalog);
+
 			 t1=t2;
 			}
 		break;
@@ -318,7 +352,7 @@ while (1)
     return 0;
 }
 
-int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
+void recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 {
     int y0,m0, d0, hh0, min0, ss0;
     int yn,mn, dn, hhnow, minnow, ssnow;
@@ -365,7 +399,7 @@ int recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog)
 		if (openDataLogFile(pDataLog, pDataLog->nameLogFile)==EXIT_FAILURE)
 		{
 			perror("Open data log file datalog.txt failed\r\n");
-			return EXIT_FAILURE;
+			return;
 		}
 	 }
 
@@ -419,6 +453,7 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
 	sprintf(fnameIR, "%sir", fleadname);
 	sprintf(fnameUV, "%suv", fleadname);
 
+
 	// 1. scan
 	// daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
 	if (daqModule.scanIRUV(posA, posB,nSam,FS_SCAN,ampIR, 1, ampUV, 1, currentdatalog.apdbv, fnamescan)==-1)
@@ -469,12 +504,15 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         	}
 */
 
+Label_DAQONLY:
     // Collect UV IR data at the optimal position
     // 3. measure IR first
     	if (refModel)
-		{ currentdatalog.IRref=INVALIDVALUE; currentdatalog.stdIRref=INVALIDVALUE;}
+		{ currentdatalog.IRref=INVALIDVALUE; currentdatalog.stdIRref=INVALIDVALUE;
+			optIR=currentdatalog.pkIRref; optUV=currentdatalog.pkUVref;}
 		else
-		{ currentdatalog.IRwtr=INVALIDVALUE; currentdatalog.stdIRwtr=INVALIDVALUE; }
+		{ currentdatalog.IRwtr=INVALIDVALUE; currentdatalog.stdIRwtr=INVALIDVALUE;
+			optIR=currentdatalog.pkIRwtr; optUV=currentdatalog.pkUVwtr;}
 
         if (optIR>=pkLOW && optIR<=pkUP)
         { // Valid IR peak
@@ -506,6 +544,7 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         // end of IR measurement if
 
 
+
    // 4. measure UV second
     	if (refModel)
 		{ currentdatalog.UVref=INVALIDVALUE; currentdatalog.stdUVref=INVALIDVALUE;}
@@ -532,7 +571,7 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         	printf("WARN: Invalid UV peak %d out of [%d,%d]. Skip daq\r\n",optUV, pkLOW, pkUP);
         }
 
-
+Label_ReturnSuccess:
   // 5. return
 //Label_ReturnSuccess:
         cout<<"SUCCESS: Both scan and daq are OK.\r\n";
@@ -643,11 +682,11 @@ void process_UART(int *pstatemain)
 			cout<<"daqModule.moveMotor2Switch OK."<<endl;
 
 #if uSW_POSITION == uSW_OpticRef
-		daqModule.omBed.uartwriteStr("setm 1 0 1920 100 1\r\n");
-		DEBUGF("BB->mBed: setm 1 0 1920 100 1\r\n");
+		daqModule.omBed.uartwriteStr("setm 1 0 1920 20 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 1920 20 1\r\n");
 #else
-		daqModule.omBed.uartwriteStr("setm 1 0 0 100 1\r\n");
-		DEBUGF("BB->mBed: setm 1 0 0 100 1\r\n");
+		daqModule.omBed.uartwriteStr("setm 1 0 0 20 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 0 20 1\r\n");
 #endif
 			usleep(10000);
 			daqModule.omBed.readline();
@@ -678,8 +717,18 @@ void process_UART(int *pstatemain)
 
                    printf("posA=%d, posB=%d, nSam=%d, ampIR=%d, ampUV=%d\n", pos1, pos2, nS, ampIR, ampUV);
                    daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+                   time_t t2;
+                   int yy, mm, dd, hh, min, ss;
+                   readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
+                   // collect data
+                   initDataLog(&currentdatalog, hh, min, ss);
+                   daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
                    // int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
-				   manual_scandaq(pos1, pos2, nS,ampIR,ampUV,fname_prefix, nSmeas);
+                   manual_scandaq(pos1, pos2, nS,ampIR,ampUV,fname_prefix, nSmeas);
+
+					 // record data
+					 recordData(t2-70, t2,&currentdatalog);
+					 printf("manually swn&daq DONE and save data to datalog file\r\n\r\n");
 
 				   // *pstatemain=DAQ;
 				   return;
@@ -710,6 +759,7 @@ void process_UART(int *pstatemain)
 				printf("daqIRUV() for UV at MS=%d successes (%s.txt). meanUV=%f\r\n", pos1, fname_prefix, muUV);
 				return;
 			}
+
 		if (strncmp(daqModule.oPC.rxbuf, "readTsetV",9)==0)
 			{
 				if (daqModule.readTsetV()!=EXIT_SUCCESS)
@@ -834,7 +884,7 @@ void setBeagleRTC(void)
 	 printf("Do you want to set a new time? (Y/N)  ");
 	 fflush(stdout);
 	 char chgTime;
-	 chgTime=getcharTimeout(10);
+	 chgTime=getcharTimeout(5);
 
 	 if (chgTime=='Y' || chgTime=='y')
 	 {	 /* prompt user for date */

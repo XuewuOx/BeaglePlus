@@ -25,6 +25,7 @@
 #define DUMPPATH "./dump/"
 
 
+
 #define uSW_OpticRef 1
 #define uSW_WaterMes 0
 
@@ -33,11 +34,16 @@
 //                 0 when the uSW at the water measurement end
 
 
+#define UVIRALWAYSON
+// #define UVALWAYSOFF
+
+
 #ifndef TRUE
-# define TRUE 1
+	# define TRUE 1
 #endif
+
 #ifndef FALSE
-# define FALSE 0
+	# define FALSE 0
 #endif
 
 struct STRUCT_Temp2APDbv
@@ -52,12 +58,15 @@ class LoadmonDriver {
 private:
 	struct STRUCT_Temp2APDbv t2apdbv;
 
+
 public:
 	uartBeagle *pmBed;//="mBed";//((char *)"mBed"); // ("mBed");
 	uartBeagle *pPC; // ("PC");
 
 	uartBeagle omBed;//="mBed";//((char *)"mBed"); // ("mBed");
 	uartBeagle oPC; // ("PC");
+
+	bool lightIsOFF; // =1 true by default after initialisation
 
 	//LoadmonDriver();
 	LoadmonDriver(): omBed("mBed"), oPC("PC"){	}

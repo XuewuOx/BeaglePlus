@@ -134,7 +134,7 @@ int LoadmonDriver::initDriver(char *fileconfig)
 
 			if (uartID1==-1 || uartID2==-1)
 				return -1;
-		lightIsOFF=FALSE; // assume light is ON for safety
+		UVIRlight=LIGHTOFF; // =LIGHTOFF for debug, =LIGHTON for safety
 		sourceOFF();
 
 		return EXIT_SUCCESS;
@@ -167,10 +167,9 @@ int LoadmonDriver::initDriver(char *fileconfig, char *uartName_mBed, char *uartN
 
 	if (uartID1==-1 || uartID2==-1)
 	{	return -1;}
-
-	lightIsOFF=FALSE; // assume light is ON for safety
+	UVIRlight=LIGHTOFF; // =LIGHTOFF for debug, =LIGHTON for safety
 	sourceOFF();
-	    return EXIT_SUCCESS;
+    return EXIT_SUCCESS;
 
 }
 
@@ -187,8 +186,7 @@ int LoadmonDriver::initDriver(char *fconfig, int uartID_mBed, int uartID_PC)
 	oPC.uartID=uartID_PC;
 	strcpy(configstruct.UARTFile_mBed, "User specified ID");
 	strcpy(configstruct.UARTFile_PC, "User specified ID");
-
-	lightIsOFF=FALSE; // assume light is ON for safety
+	UVIRlight=LIGHTOFF; // =LIGHTOFF for debug, =LIGHTON for safety
 	sourceOFF();
 	return EXIT_SUCCESS;
 
@@ -226,6 +224,7 @@ int LoadmonDriver::selftest()
 		// sleep one second and readline to clear the rx buffer
 		// This is to avoid confusing strings from mbed uart.
 		sleep(1);
+
 		omBed.readline();
 		oPC.uartwriteStr(" OK\r\n");
 		printf(" OK\r\n");
@@ -338,8 +337,8 @@ int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
 			// printf("T=%7.2fdegC, V=%7.2fv\r\n", temp2, configstruct.T2VTable[1][i]);
 			t2apdbv.ind_now=i;
 			if (t2apdbv.ind_now == t2apdbv.ind_last)
-			{  // same temperature range, do nothing, not update aomv
-				// *apdbv=configstruct.T2VTable[1][i];
+			{  // same temperature range, update the records of apdbv, but not update aomv
+				*apdbv=configstruct.T2VTable[1][i];
 				// setAPDBV(configstruct.T2VTable[1][i]); // for debug and update amov
 			}
 			else
@@ -423,7 +422,7 @@ void LoadmonDriver::sourceOFF()
 {
 
 #ifdef UVIRALWAYSON
-	printf("IR and UV are set always ON \r\n");
+	printf("IR and UV are set always ON. Ignore soureOFF request \r\n");
 	return;
 #else
 	omBed.uartwriteStr("irt\r\n");
@@ -431,7 +430,7 @@ void LoadmonDriver::sourceOFF()
 	omBed.uartwriteStr("uvt\r\n");
 	printf("uvt\r\n"); // PC.uartwriteStr("\% uvt\r\n");
 	printf("IR and UV are off \r\n");
-	lightIsOFF=TRUE;
+	UVIRlight=LIGHTOFF;
 #endif
 
 }
@@ -440,14 +439,14 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 {
 
 	char tempStr[500];
-
-#ifdef UVIRALWAYSON
-	if (lightIsOFF==FALSE)
-		{// light has been ON
-		  return;}
+#ifdef 	UVIRALWAYSON
+	if 	(UVIRlight==LIGHTON)
+	{
+	printf("UVIRlight==LIGHTON, no need to re-switch on the lights\r\n");
+	return;
+	}
 #endif
 	// switch ON light source
-	lightIsOFF=FALSE;
 	if (ampUV<=0)
 	 			sprintf(tempStr,"uvt\r\n");
 	else if (ampUV>=100)
@@ -477,6 +476,8 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	printf(tempStr); // PC.uartwriteStr(tempStr);
 	usleep(10000);
 	omBed.readline();
+
+	UVIRlight=LIGHTON;
 
 	sprintf(tempStr,"irg%2d\r\n",gainIR);
 	omBed.uartwriteStr(tempStr);
@@ -542,15 +543,17 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 
 		// set mBed's sampling rate to 500
 		sprintf(temStr,"a2d s %d %d\r\n", sFs, 0);
-	    omBed.uartwriteStr(temStr);
+	   //  omBed.uartwriteStr(temStr);
+		printf("Ignore ");
 		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
 		ttimeout=nSperS*abs(nDataSteps_a2b)*(2.0*1000*1/sFs+1)+60*3000+40000; // assume Fs Hz sampling rate
 												// 50 ms for sending each data via UART
 		                                        // motor spd: 100 steps per second
 		                                        // maximum 3000 steps
 		// ttimeout=120000;
-		printf("a2d s %d %d  to set mBed's sampling rate to %d\r\n", sFs, 0, sFs);
-		usleep(10000);
+		printf(" a2d s %d %d  to set mBed's sampling rate to %d\r\n", sFs, 0, sFs);
+		// usleep(10000);
+		sleep(1);
 		omBed.readlineTimeOut(2000); //ms
 
 
@@ -603,13 +606,13 @@ int LoadmonDriver::daqIRUV(int posA, int nSam, int sFs, int ampIR, int gainIR, i
 //		char fnamedaq[100];
 //		 sprintf(fnamedaq, "%s.txt", fnamebase_daq);
 
-		sprintf(tempStr,"move -d 1 %d\r\n",posA);
-		omBed.uartwriteStr(tempStr);
-		// PC.uartwriteStr(tempStr);
-		printf(tempStr);
-		usleep(10000);
-		omBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
-		usleep(500000);
+//		sprintf(tempStr,"move -d 1 %d\r\n",posA);
+//		omBed.uartwriteStr(tempStr);
+//		 PC.uartwriteStr(tempStr);
+//		printf(tempStr);
+//		usleep(10000);
+//		omBed.readlineTimeOut(30000); // wait until motor arrives at optimal position
+//		usleep(500000);
 
 		omBed.flushrxbuf();
 		sourceON(ampIR, gainIR, ampUV, gainUV, apdBias);
@@ -632,7 +635,8 @@ int LoadmonDriver::daqIRUVcore(int posA, int nSamples, int Fs, char * fleadnamem
 	sprintf(fname, "%s.txt", fleadnamemeas);
 	// set mBed's sampling rate to 500
 		sprintf(tempStr,"a2d s %d %d\r\n", Fs, 0);
-		omBed.uartwriteStr(tempStr);
+	printf("Ignore ");
+		//omBed.uartwriteStr(tempStr);
 
 		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
 		ttimeout=nSamples*(1000*1/Fs+2)+10*2000+20000; // assume Fs Hz sampling rate

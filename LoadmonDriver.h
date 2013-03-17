@@ -34,9 +34,11 @@
 //                 0 when the uSW at the water measurement end
 
 
-#define UVIRALWAYSON
+// #define UVIRALWAYSON
 // #define UVALWAYSOFF
 
+#define LIGHTON 1
+#define LIGHTOFF 0
 
 #ifndef TRUE
 	# define TRUE 1
@@ -66,8 +68,7 @@ public:
 	uartBeagle omBed;//="mBed";//((char *)"mBed"); // ("mBed");
 	uartBeagle oPC; // ("PC");
 
-	bool lightIsOFF; // =1 true by default after initialisation
-
+	bool UVIRlight;
 	//LoadmonDriver();
 	LoadmonDriver(): omBed("mBed"), oPC("PC"){	}
 	virtual ~LoadmonDriver();

@@ -12,12 +12,18 @@
 
 #include "sigProcess.h"
 
+#define NAN 0x8000000
+#include <math.h>
+
 // #include "getRand.h"
 // #include "gfit.h"
-#include "test.h"
 #include "gfit_rdfile.h"
 #include "meanfile.h"
 
+int procScanDataCore(char* fname, int* pkIR, int* pkUV, float *aIR,float *aUV,float *sigIR, float *sigUV )
+{
+	return EXIT_SUCCESS;
+}
 int procScanData(char* fname, int* optIR, int* optUV)
 {
 	// Gaussian fitting to find the peak location
@@ -57,44 +63,89 @@ int procScanData(char* fname, int* optIR, int* optUV)
 
 int procDaqData(char* fname, double* muIR, double* muUV)
 {
-	   double EIR[2], EUV[2];
-        int fsize[2];
-        EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
-        fsize[0]=1; fsize[1]=strlen(fname);
-        meanfile(fname, fsize, EIR, EUV);
-        printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
-            		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
-        *muIR=EIR[0];
-        *muUV=EUV[0];
-        return EXIT_SUCCESS;
+	    double stdIR, stdUV;
+        return procDaqData2(fname, muIR, muUV, &stdIR, &stdUV);
 }
 
 int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double* stdUV)
 {
-	 double EIR[2], EUV[2];
+	 double IRgf[3], UVgf[3]; // to store results fo Gaussian fitting
+	 double IRms[2], UVms[2]; // to store results of mean() and std()
+	 /* Return arguments of MATLAB generated codes meanfile()
+	 % Return values:
+	 %		IRgf=[muIR, sigIR, aIR] for mean, width and amplitude of Gaussian fitting over hist(IR)
+	 %      UVgf=[muUV, sigUV, aUV] for mean, width and amplitude of Gaussian fitting over hist(IR)
+	 %         IRavg=[meanIR, stdIR] for mean and std of IR by mean() and std()
+	 %         UVavg=[meanUV, stdUV] for mean and std of UV by mean() and std()
+	  */
+	 printf("   Noise filtring at \"%s\" ...\r\n", fname);
      int fsize[2];
-     EIR[0]=-1.0; EIR[1]= -2.0; EUV[0]=-3.0; EUV[1]=-4.0;
+     IRgf[0]=-1.0; IRgf[1]= -2.0; IRgf[2]=-3; UVgf[0]=-3.0; UVgf[1]=-4.0; UVgf[2]=-5;
      fsize[0]=1; fsize[1]=strlen(fname);
-     meanfile(fname, fsize, EIR, EUV);
-     if (EIR[0]<0 && EIR[1]<0)
-     {
-    	 if (EIR[0]==-1)
-    		 printf("ERROR: failed to open data file %s\r\n", fname);
-    	 else if (EIR[0]==-2)
-    		 printf("ERROR: Gaussian fitting over %s failed. \r\n", fname);
 
-    	  *muIR=EIR[0]; *stdIR=EIR[1];
-    	  *muUV=EUV[0]; *stdUV=EUV[1];
-    	  return EXIT_FAILURE;
+     meanfile(fname, fsize, IRgf, UVgf, IRms, UVms);
+
+     if (IRgf[0]<=0 ||IRgf[1]<=0 || isnan(IRgf[0]) || isnan(IRgf[1]))
+     { // negative mean of Gaussian fitting, failed
+    	 if (IRgf[0]==-1)
+    		 { printf("    ERROR[%d]: failed to open data file\r\n", (int)IRgf[0]);
+    		   return EXIT_FAILURE;
+    		 }
+    	 else if (IRgf[0]==-2|| IRgf[0]==-3)
+    		 { printf("    ERROR[%d]: incorrect format of data file\r\n", (int)IRgf[0]);
+    		   return EXIT_FAILURE;
+    		 }
+    	 else
+    		 { printf("    ERROR[%d]: IR Gaussian fitting over failed. IRgfmu=%f, IRgfsig=%f\r\n", (int)IRgf[0], IRgf[0], IRgf[1]);
+    		   if (IRms[0]<0 || IRms[1]<0 || isnan(IRms[0]) ||isnan(IRms[1]))
+    			   return EXIT_FAILURE;
+    		   else
+    		      {// using mean() and std() method
+    			   printf("     Using mean() and std() instead ");
+    			   *muIR=IRms[0]; *stdIR=IRms[1];
+    		      }
+    		 }
      }
      else
      {
-    	 printf(" Averaging at \"%s\" OK. IR[mu, sigma]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]\r\n",
-         		fname, EIR[0], EIR[1], EUV[0], EUV[1]);
-    	 *muIR=EIR[0]; *stdIR=EIR[1];
-    	 *muUV=EUV[0]; *stdUV=EUV[1];
-    	 return EXIT_SUCCESS;
+    	 printf("    IR Gaussian fitting OK.");
+    	 *muIR=IRgf[0]; *stdIR=IRgf[1];
      }
+
+     printf("     muIR=%4.2f, stdIR=%4.2f\r\n", *muIR, *stdIR);
+
+
+     if (UVgf[0]<=0 ||UVgf[1]<=0 || isnan(UVgf[0]) || isnan(UVgf[1]))
+     { // negative mean of Gaussian fitting, failed
+    	 if (UVgf[0]==-1)
+    		 { printf("    ERROR[%d]: failed to open data file.\r\n", (int)UVgf[0]);
+    		   return EXIT_FAILURE;
+    		 }
+    	 else if (UVgf[0]==-2||UVgf[0]==-3)
+    		 { printf("    ERROR[%d]: incorrect format of data file.r\n", (int)UVgf[0]);
+    		   return EXIT_FAILURE;
+    		 }
+    	 else
+    		 { printf("    ERROR[%d]: UV Gaussian fitting failed. IRgfmu=%f, IRgfsig=%f\r\n", (int)UVgf[0], UVgf[0],UVgf[1]);
+    		   if (UVms[0]<0 || UVms[1]<0 || isnan(UVms[0]) ||isnan(UVms[1]))
+				   return EXIT_FAILURE;
+			   else
+				  {// using mean() and std() method
+				   printf("     Using mean() and std() instead");
+				   *muUV=UVms[0]; *stdUV=UVms[1];
+				  }
+
+    		 }
+     }
+     else
+     {
+    	 printf("    UV Gaussian fitting OK.");
+    	 *muUV=UVgf[0]; *stdUV=UVgf[1];
+     }
+
+     printf("      muUV=%4.2f, stdUV=%4.2f\r\n", *muUV, *stdUV);
+
+     return EXIT_SUCCESS;
 }
 
 // Test Matlab Code Generation
@@ -154,14 +205,28 @@ void testMatabCode()
 
 
  	// char *fnameIR="./data/testfiles/refir.txt";
-     char *fnameIR="./data/testfiles/refir_test4.txt";
-	  fsize[0]=1; fsize[1]=strlen(fnameIR);
-	  double dIR[2], dUV[2];
-    dIR[0]=-3; dIR[1]=-3;
-    dUV[0]=-4; dUV[1]=-4;
+     // char *fnameIR="./data/testfiles/refir_test4.txt";
+     char *fnameIR="./data/testfiles/wtrir_20130315_23h12m00s.txt";
 
-    meanfile(fnameIR, fsize, dIR, dUV);
-    printf("   IR[mu, std]=[%5.2f, %5.2f], UV=[%5.2f %5.2f]. Averaging at \"%s\" OK. \r\n",
-    		dIR[0], dIR[1], dUV[0], dUV[1], fnameIR);
+	 double muIR=-1, stdIR=-1;
+	 double muUV=-1, stdUV=-1;
+
+/* call meanfile() directly
+	 int fsize[2];
+     double IRgf[3], UVgf[3]; // to store results fo Gaussian fitting
+	 double IRms[2], UVms[2]; // to store results of mean() and std()
+	 IRgf[0]=-1.0; IRgf[1]= -2.0; IRgf[2]=-3; UVgf[0]=-3.0; UVgf[1]=-4.0; UVgf[2]=-5;
+	 fsize[0]=1; fsize[1]=strlen(fname);
+     meanfile(fname, fsize, IRgf, UVgf, IRms, UVms);
+     printf("   gfitting: IR=[%5.2f, %5.2f], UV=[%5.2f %5.2f].\r\n", IRgf[0], IRgf[1], UVgf[0], UVgf[1]);
+     printf("   mean/std: IR=[%5.2f, %5.2f], UV=[%5.2f %5.2f].\r\n", IRms[0], IRms[1], UVms[0], UVms[1]);
+*/
+
+	 // call procDaqData2() to test meanfile()
+     if (procDaqData2(fnameIR, &muIR, &muUV, &stdIR, &stdUV)==EXIT_FAILURE)
+    	 {printf("   ERROR: Noise filtering at \"%s\" failed.\r\n", fnameIR); }
+     else
+     	 {printf("   Noise filtering at \"%s\" OK.\r\n",fnameIR); }
+     printf("   IR=[%5.2f, %5.2f], UV=[%5.2f %5.2f].\r\n", muIR, stdIR, muUV, stdUV);
 
 }

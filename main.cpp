@@ -94,7 +94,7 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
 #define UARTNAME_PC "/dev/ttyO2"
 #define DATAFILEPATH "./data/"
-#define DAQINTERVAL_s 60
+#define DAQINTERVAL_s 180
 
 int main(int argc, char* argv[]) {
 
@@ -219,27 +219,28 @@ while (1)
 			daqModule.oPC.uartwriteStr(tempStr);
 			 // collect data
 
-			int optIR0=currentdatalog.pkIRref;
-			 float apdBV0=currentdatalog.apdbv;
-			 int aomv0=currentdatalog.aomv;
+			 // int optIR0=currentdatalog.pkIRref; // for reference daq only
+			 // int aomv0=currentdatalog.aomv; // for reference daq only
 			 initDataLog(&currentdatalog, hh, min, ss);
-			 currentdatalog.pkIRref=optIR0;
-			 currentdatalog.apdbv=apdBV0;
-			 currentdatalog.aomv=aomv0;
+			 // currentdatalog.pkIRref=optIR0; // for reference daq only
+			 // currentdatalog.aomv=aomv0; // for reference daq only
 
 			 daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv));
 
 
 			 //reference scanning and daq
-			 // auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), "ref");
+			  auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), "ref");
 			 // manual_scandaq(1750, 1900,10,25,00,"ref", 2000); // for debug
+			//  recordData(t1, t2,&currentdatalog);
+			  //				 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
+
 
 			 // water scanning and daq
-			 // auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
+			  auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),"wtr");
 
 			 //===================================================
 			 // reference daq only
-			 printf("currentdatalog.pkIRref=%d\r\n", currentdatalog.pkIRref);
+		/*	 printf("currentdatalog.pkIRref=%d\r\n", currentdatalog.pkIRref);
 				if(daqModule.daqIRUV(currentdatalog.pkIRref, 2000, FS_SCAN,
 						    configstruct.refdaq.ampIR, configstruct.refdaq.gainIR,
 						    configstruct.refdaq.ampUV, configstruct.refdaq.gainUV,
@@ -255,6 +256,7 @@ while (1)
 						currentdatalog.pkIRref, "refir", muIR, stdIR);
 	        	currentdatalog.IRref=muIR; currentdatalog.stdIRref=stdIR;
 	        	currentdatalog.UVref=muUV; currentdatalog.stdUVref=stdUV;
+	     */
 	        	//================================================
 
 
@@ -484,13 +486,17 @@ int manual_scandaq(int posA, int posB, int nSam, int ampIR, int ampUV, char *fle
         	{
         	  currentdatalog.pkIRref=optIR;  currentdatalog.sigmaIRref=INVALIDVALUE;
         	  currentdatalog.pkUVref=optUV;  currentdatalog.sigmaUVref=INVALIDVALUE;
+        	  // currentdatalog.IRref=muIR; currentdatalog.stdIRref=stdIR;
         	}
         else
         	{
         	currentdatalog.pkIRwtr=optIR;  	currentdatalog.sigmaIRwtr=INVALIDVALUE;
         	currentdatalog.pkUVwtr=optUV; 	currentdatalog.sigmaUVwtr=INVALIDVALUE;
-            }
-/*
+        	// currentdatalog.IRwtr=muIR; currentdatalog.stdIRwtr=stdIR;
+        	}
+        // goto Label_ReturnSuccess;
+
+        /*
         if ( (optIR<pkLOW || optIR>pkUP) && (optUV<pkLOW || optUV>pkUP) )
         	{ cout << "WARN: Both peaks of IR and UV are invalid. Skip daq"<<endl;
             if (refModel)
@@ -543,7 +549,7 @@ Label_DAQONLY:
         }
         // end of IR measurement if
 
-
+// goto Label_ReturnSuccess;// Skip UV
 
    // 4. measure UV second
     	if (refModel)
@@ -682,11 +688,11 @@ void process_UART(int *pstatemain)
 			cout<<"daqModule.moveMotor2Switch OK."<<endl;
 
 #if uSW_POSITION == uSW_OpticRef
-		daqModule.omBed.uartwriteStr("setm 1 0 1920 20 1\r\n");
-		DEBUGF("BB->mBed: setm 1 0 1920 20 1\r\n");
+		daqModule.omBed.uartwriteStr("setm 1 0 1920 100 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 1920 100 1\r\n");
 #else
-		daqModule.omBed.uartwriteStr("setm 1 0 0 20 1\r\n");
-		DEBUGF("BB->mBed: setm 1 0 0 20 1\r\n");
+		daqModule.omBed.uartwriteStr("setm 1 0 0 100 1\r\n");
+		DEBUGF("BB->mBed: setm 1 0 0 100 1\r\n");
 #endif
 			usleep(10000);
 			daqModule.omBed.readline();

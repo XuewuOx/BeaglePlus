@@ -19,6 +19,8 @@
 #define MAXBUF 1024
 #define LENT2VTABLE 41
 
+#define DAQINTERVAL_s 600
+
 struct scanArg
 {
 	int posA;
@@ -54,16 +56,19 @@ struct config
    struct scanArg wtrscan;
    struct daqArg refdaq;
    struct daqArg wtrdaq;
-   int slowstartDelay;
-   char temperature[MAXBUF];
-   char APDBV[MAXBUF];
-   char D2Avalue[MAXBUF];
+   int slowstartDelay; // seconds
+   int refInterval; // seconds
+   int wtrInterval; // seconds
+   // char temperature[MAXBUF];
+   // char APDBV[MAXBUF];
+   // char D2Avalue[MAXBUF];
    float T2VTable[2][LENT2VTABLE];
 };
 
 int get_config(char *filename, struct config *pconfig);
+void check_config(struct config *pconfig);
+
 void trim(char *s);  /* Remove tabs/spaces/lf/cr  both ends */
 int readT2VTable(char *cfline, struct config *pconfig, int lineID);
-void check_config(struct config *pconfig);
 
 #endif /* RDCONFIGFILE_H_ */

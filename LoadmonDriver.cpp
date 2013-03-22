@@ -325,7 +325,7 @@ int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
 	t2apdbv.tempFiltered=readTemperature();
 	*tempDeg=t2apdbv.tempFiltered;
 
-	// printf("temp2=%f\r\n",temp2);
+	printf("temp2=%f\r\n",*tempDeg);
 	if (*tempDeg<configstruct.T2VTable[0][0] || *tempDeg>configstruct.T2VTable[0][LENT2VTABLE])
 		return EXIT_FAILURE;
 
@@ -334,12 +334,13 @@ int  LoadmonDriver::readTsetV(float *tempDeg, float *apdbv, int *aomv)
 	{
 		if (abs(*tempDeg-configstruct.T2VTable[0][i])<=IntervalTgrid)
 		{
-			// printf("T=%7.2fdegC, V=%7.2fv\r\n", temp2, configstruct.T2VTable[1][i]);
+			printf("T=%7.2fdegC, V=%7.2fv\r\n", *tempDeg, configstruct.T2VTable[1][i]);
 			t2apdbv.ind_now=i;
 			if (t2apdbv.ind_now == t2apdbv.ind_last)
 			{  // same temperature range, update the records of apdbv, but not update aomv
 				*apdbv=configstruct.T2VTable[1][i];
 				// setAPDBV(configstruct.T2VTable[1][i]); // for debug and update amov
+				setAPDBV(*apdbv, aomv);
 			}
 			else
 			{
@@ -493,6 +494,7 @@ void LoadmonDriver::sourceON(int ampIR, int gainIR, int ampUV, int gainUV, float
 	omBed.readline();
 
 
+	// apdbias could be ignored
 	sprintf(tempStr,"apdbv %3.2fv\r\n",apdBias);
 
 	omBed.uartwriteStr(tempStr);
@@ -516,6 +518,7 @@ int LoadmonDriver::scanIRUV(int posA, int posB, int nSam, int sFs, int ampIR, in
 	int scanOK;
 
 	omBed.flushrxbuf();
+	cout<<"==================================="<<endl;
 	sourceON(ampIR, gainIR, ampUV, gainUV, apdBias);
 	scanOK=scanIRUVcore(posA, scanSteps,nSam,sFs, fnamebase);
 	sourceOFF();
@@ -543,8 +546,8 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 
 		// set mBed's sampling rate to 500
 		sprintf(temStr,"a2d s %d %d\r\n", sFs, 0);
-	   //  omBed.uartwriteStr(temStr);
-		printf("Ignore ");
+	    omBed.uartwriteStr(temStr);
+		// printf("Ignore ");
 		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
 		ttimeout=nSperS*abs(nDataSteps_a2b)*(2.0*1000*1/sFs+1)+60*3000+40000; // assume Fs Hz sampling rate
 												// 50 ms for sending each data via UART
@@ -561,7 +564,6 @@ int LoadmonDriver::scanIRUVcore(int a, int nDataSteps_a2b, int nSperS, int sFs, 
 		omBed.flushrxbuf();
 		omBed.uartwriteStr(temStr);
 		cout<<"send 'swn "<< a <<" "<< a+nDataSteps_a2b-1 <<" "<< nSperS<< "' down to mBed"<<endl;
-		cout<<"==================================="<<endl;
 		size_t found0, found2;
 
 
@@ -615,6 +617,7 @@ int LoadmonDriver::daqIRUV(int posA, int nSam, int sFs, int ampIR, int gainIR, i
 //		usleep(500000);
 
 		omBed.flushrxbuf();
+
 		sourceON(ampIR, gainIR, ampUV, gainUV, apdBias);
 		int daqOK;
     	daqOK=daqIRUVcore(posA, nSam, sFs,fnamebase_daq);
@@ -635,8 +638,8 @@ int LoadmonDriver::daqIRUVcore(int posA, int nSamples, int Fs, char * fleadnamem
 	sprintf(fname, "%s.txt", fleadnamemeas);
 	// set mBed's sampling rate to 500
 		sprintf(tempStr,"a2d s %d %d\r\n", Fs, 0);
-	printf("Ignore ");
-		//omBed.uartwriteStr(tempStr);
+	//printf("Ignore ");
+		omBed.uartwriteStr(tempStr);
 
 		uint ttimeout; // ms, threshold of waiting time for readPktTimeout()
 		ttimeout=nSamples*(1000*1/Fs+2)+10*2000+20000; // assume Fs Hz sampling rate

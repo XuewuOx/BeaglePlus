@@ -36,21 +36,26 @@ struct struct_DataLog
 {
 	unsigned int yy, mm, dd;
    unsigned int hour, min, sec;
-   float IRnorm, UVnorm;
-   float IRref, UVref;
-   int pkIRref, pkUVref;
+   float IRnorm, UVnorm; // standardised  IR/UV measurements
+   float IRref, UVref;  // averaged IR/UV values at the peaks of reference scanning
+   int pkIRref, pkUVref; // peak of IR/UV's reference scanning
 
+   //standard deviation of IRref and UVref. And the width of the scanning shape
    float stdIRref, stdUVref, sigmaIRref, sigmaUVref;
-   float IRwtr, UVwtr;
-   int pkIRwtr, pkUVwtr;
-   float stdIRwtr, stdUVwtr, sigmaIRwtr, sigmaUVwtr;
-   float SS, COD;
-   float SSmA, CODmA;
-   float tempDeg, apdbv;
-   int aomv;
 
-   char nameLogFile[100];
-   FILE *handleLogFile;
+   float IRwtr, UVwtr; // averaged IR/UV values at the peaks of water scanning
+   int pkIRwtr, pkUVwtr; // peak position in motor steps of IR/UV's water scanning
+
+   //standard deviation of IRwtr and UVwtr
+   float stdIRwtr, stdUVwtr, sigmaIRwtr, sigmaUVwtr;
+
+   float SS, COD; // estimated SS and COD
+   float SSmA, CODmA; // 4-20mA output for SS and COD
+   float tempDeg, apdbv; //temperature and corresponding APD's bias voltage
+   int aomv; // corresponding mBed analogue output controlling APD's bias voltage
+
+   char nameLogFile[100]; // name of data log file
+   FILE *handleLogFile; // file handle of data log file
 };
 
 

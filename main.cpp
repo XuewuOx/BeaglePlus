@@ -94,7 +94,7 @@ void setBeagleRTC3(int yy, int mm, int dd, int hh, int min, int ss);
 
 #define UARTNAME_PC "/dev/ttyO2"
 #define DATAFILEPATH "./data/"
-#define DAQINTERVAL_s 180
+
 
 int main(int argc, char* argv[]) {
 
@@ -102,7 +102,6 @@ int main(int argc, char* argv[]) {
 	unsigned int nDAQ;
     double elapsed_secs;
     char *pNamemBed;
-    char pNamePC[20]="/dev/ttyO2";
     int nChars;
     char tempStr[500];
     int returnstate; // a variable returned by a function
@@ -188,11 +187,14 @@ int main(int argc, char* argv[]) {
 	printf("%s", tempStr);
 	daqModule.oPC.uartwriteStr(tempStr);
 
+	sprintf(tempStr,"    DAQ interval (for both ref and wtr)  %d seconds \r\n",configstruct.wtrInterval);
+	printf("%s",tempStr);
+	daqModule.oPC.uartwriteStr(tempStr);
 
 	// The main program loop:
 	time_t t1, t2;
 	time(&t1);
-	t1-=DAQINTERVAL_s; // for debug purpose: start first DAQ immediately
+	t1=t1-(configstruct.refInterval+configstruct.wtrInterval); // to start first scan&daq immediately for debug purpose
 	nDAQ=0;
 
 
@@ -210,8 +212,10 @@ while (1)
 		// printf("check new time t2\r\n");
 		elapsed_secs=difftime(t2,t1);
 		// cout<<"elapsed_secs="<<elapsed_secs<<endl;
-		if (elapsed_secs>=DAQINTERVAL_s)
-			{
+
+		// if (elapsed_secs>=DAQINTERVAL_s)
+		if (elapsed_secs>=configstruct.wtrInterval)
+		{
 			nDAQ++;
 			readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
 			sprintf(tempStr,"\r\n[%d/%d/%d %02d:%02d:%02d] start %d-th UV/IR measurements\n",yy,mm,dd,hh,min,ss, nDAQ);
@@ -262,7 +266,7 @@ while (1)
 
 				 // record data
 				 recordData(t1, t2,&currentdatalog);
-				 printf("%d-th reference measurement DONE \r\n\r\n",nDAQ);
+				 printf("%d-th reference & water measurement DONE \r\n\r\n",nDAQ);
 
 			 // printf("skip %d-th DAQ for debugging \r\n\r\n", nDAQ);
 			 // statemain=DAQ; // to start data acquisition
@@ -406,7 +410,7 @@ void recordData(time_t tlastrecord, time_t tnow, struct struct_DataLog *pDataLog
 	 }
 
 	 appendDataLog(pDataLog);
-		printf("save currentDatalog to %s ... OK\r\n",pDataLog->nameLogFile);
+	 printf("save currentDatalog to %s ... OK\r\n",pDataLog->nameLogFile);
 }
 
 
@@ -724,6 +728,7 @@ void process_UART(int *pstatemain)
                    printf("posA=%d, posB=%d, nSam=%d, ampIR=%d, ampUV=%d\n", pos1, pos2, nS, ampIR, ampUV);
                    daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
                    time_t t2;
+                   time(&t2);
                    int yy, mm, dd, hh, min, ss;
                    readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
                    // collect data
@@ -733,7 +738,12 @@ void process_UART(int *pstatemain)
                    manual_scandaq(pos1, pos2, nS,ampIR,ampUV,fname_prefix, nSmeas);
 
 					 // record data
-					 recordData(t2-70, t2,&currentdatalog);
+  				 // record data
+
+  				 daqModule.oPC.uartwriteStr("\r\n--- swn&daq Results of ");
+  				daqModule.oPC.uartwriteStr(fname_prefix);
+  				daqModule.oPC.uartwriteStr("--- \r\n");
+  				 recordData(t2-70, t2,&currentdatalog);
 					 printf("manually swn&daq DONE and save data to datalog file\r\n\r\n");
 
 				   // *pstatemain=DAQ;
@@ -773,6 +783,112 @@ void process_UART(int *pstatemain)
 				return;
 			}
 
+		if (strncmp(daqModule.oPC.rxbuf, "ref&wtr",7)==0)
+		//==========================
+		{    int nArg;
+			int nWtr; // how many scanning for wtr measurement
+			time_t t2;
+		   time(&t2);
+		   char tempStr[300];
+		   char fname_prefix[50];
+		   int yy, mm, dd, hh, min, ss;
+
+		   nArg=sscanf(daqModule.oPC.rxbuf, "ref&wtr %s %d",fname_prefix, &nWtr);
+		   if (nArg!=2)
+				{  daqModule.oPC.uartwriteStr("% Incorrect arguments for ref&wtr. Ignored.\r\n");
+						printf("%% \"%s\" has incorrect parameters, Ignored.\r\n", daqModule.oPC.rxbuf);
+						daqModule.oPC.rxbuf[0]='\0'; // To enhance safety, make sure there is no string in the rxbuf
+						return;
+				}
+			FILE *fp;
+			fp = fopen("./data/Test_ref&wtr.txt","aw");
+			 if(fp==NULL)
+			{
+			    printf ("ERROR: Open data log file fopen(./data/Test_ref&wtr.txt) failed\r\n");
+			    return;
+			}
+		   readTime2(t2, &yy, &mm, &dd, &hh, &min, &ss);
+		   // collect data
+		   initDataLog(&currentdatalog, hh, min, ss);
+		   if(daqModule.readTsetV(&(currentdatalog.tempDeg), &(currentdatalog.apdbv), &(currentdatalog.aomv))==EXIT_FAILURE)
+			   {
+			   printf("readTsetV() failed. skip ref&wtr command\r\n");
+			   fclose(fp);
+			   return;
+			   }
+		   configstruct.refscan.apdBV=currentdatalog.apdbv;
+		   configstruct.refdaq.apdBV=currentdatalog.apdbv;
+		   configstruct.wtrscan.apdBV=currentdatalog.apdbv;
+		   configstruct.wtrdaq.apdBV=currentdatalog.apdbv;
+
+		   // int manual_daqswn(int posA, int posB, int nSam, int ampIR, int ampUV);
+		   sprintf(tempStr,"\r\n\r\n[%d/%d/%d %02d:%02d:%02d] start reference and water measurements for data analysis\r\n",yy,mm,dd,hh,min,ss);
+			printf("%s", tempStr);
+			daqModule.oPC.uartwriteStr(tempStr);
+			fprintf(fp,tempStr);
+			 //reference scanning and daq
+			sprintf(tempStr,"ref%s",fname_prefix);
+			auto_scandaq(&(configstruct.refscan), &(configstruct.refdaq), tempStr);
+
+				// water scanning and daq
+			for (int i=1;i<=nWtr;i++)
+				{
+				sprintf(tempStr,"wtr%s%1d",fname_prefix,i);
+				auto_scandaq(&(configstruct.wtrscan), &(configstruct.wtrdaq),tempStr);
+				recordData(t2-70, t2,&currentdatalog);
+
+				// display and save currentdatalog for data analysis
+				// daqModule.oPC.uartwriteStr("--- swn&daq Results of \r\n");
+				// fprintf(fp, "\r\n--- swn&daq Results of \r\n");
+				sprintf(tempStr,"    ./dump/ref%s[scan|ir|uv]_%04d%02d%02d_%02dh%02dm%02ds.txt\r\n",fname_prefix,yy,mm,dd,hh,min,ss);
+				daqModule.oPC.uartwriteStr(tempStr);
+				fprintf(fp, tempStr);
+
+				sprintf(tempStr,"    ./dump/wtr%s%d[scan|ir|uv]_%04d%02d%02d_%02dh%02dm%02ds.txt\r\n",fname_prefix,i,yy,mm,dd,hh,min,ss);
+				daqModule.oPC.uartwriteStr(tempStr);
+				fprintf(fp, tempStr);
+
+
+
+				struct struct_DataLog *pd;
+				 char strResult[200];
+				 pd=&currentdatalog;
+
+				 //sprintf(strResult, "[HHMMSS] %02d\t%02d\t%02d\r\n",pd->hour,pd->min,pd->sec);
+				 // daqModule.oPC.uartwriteStr(strResult);
+				 // fprintf(fp,strResult);
+
+				 sprintf(strResult, "\t tempC=%07.3f\t APDbv=%07.2f\t aomv=%04d\r\n", pd->tempDeg,pd->apdbv, pd->aomv);
+				 daqModule.oPC.uartwriteStr(strResult);
+				 fprintf(fp,strResult);
+
+				 sprintf(strResult, "\t IRnorm=\t%08.5f\t UVnorm=%08.5f\r\n",pd->IRnorm, pd->UVnorm);
+				 daqModule.oPC.uartwriteStr(strResult);
+				 fprintf(fp,strResult);
+				//	fprintf(fp, "\t%08.3f\t%08.3f",pd->SS,pd->COD);
+
+				sprintf(strResult, "\tIRref=%08.3f\t UVref=%08.3f\t pkIRref=%04d\t pkUVref=%04d\r\n", pd->IRref, pd->UVref, pd->pkIRref, pd->pkUVref);
+				daqModule.oPC.uartwriteStr(strResult);
+				fprintf(fp,strResult);
+
+				sprintf(strResult, "\tIRwtr=%08.3f\t UVwtr=%08.3f\t pkIRwtr=%04d\t pkUVwtr=%04d\r\n", pd->IRwtr, pd->UVwtr, pd->pkIRwtr, pd->pkUVwtr);
+				daqModule.oPC.uartwriteStr(strResult);
+				fprintf(fp,strResult);
+
+				sprintf(strResult, "\tstdIRref=%08.3f\t stdUVref=%08.3f\t sigIRref=%08.3f\t sigUVref=%08.3f\r\n", pd->stdIRref, pd->stdUVref, pd->sigmaIRref, pd->sigmaUVref);
+				daqModule.oPC.uartwriteStr(strResult);
+				fprintf(fp,strResult);
+
+				sprintf(strResult, "\tstdIRwtr=%08.3f\t stdUVwtr=%08.3f\t sigIRwtr=%08.3f\tsigUVwtr=%08.3f\r\n", pd->stdIRwtr, pd->stdUVwtr, pd->sigmaIRwtr, pd->sigmaUVwtr);
+				daqModule.oPC.uartwriteStr(strResult);
+				fprintf(fp,strResult);
+					// sprintf(strResult, "\t%08.3f\t%08.3f",pd->SSmA,pd->CODmA);
+				sleep(2); // wait for user copy results
+			}
+			fclose(fp);
+		 printf("manually ref&wtr DONE and save data to files datalog and Test_ref&wtr.txt \r\n\r\n");
+		 return;
+		}
 
 		//Otherwise, forward recieved string to console and mBed
 		printf("PC->BB->mBed (line=%d): %s", recvLines_PC, daqModule.oPC.rxbuf);

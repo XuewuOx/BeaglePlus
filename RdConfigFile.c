@@ -23,6 +23,10 @@ int get_config(char *filename, struct config *pconfig)
 	FILE *file = fopen (filename, "r");
 	char *cfline;
 
+	// set default values
+	pconfig->refInterval=DAQINTERVAL_s;
+	pconfig->wtrInterval=DAQINTERVAL_s;
+
 	if (file != NULL)
 	{
 		char oneline[MAXBUF];
@@ -158,6 +162,22 @@ int get_config(char *filename, struct config *pconfig)
 				i++;continue;
 				}
 
+			if (strstr(oneline,"refMeasurementInterval=")!=NULL){
+				nArg=sscanf(cfline, "%ds", &pconfig->refInterval);
+				if (nArg!=1) {
+						printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
+						return EXIT_FAILURE;
+						}
+					i++;continue;
+					}
+			if (strstr(oneline,"wtrMeasurementInterval=")!=NULL){
+				nArg=sscanf(cfline, "%ds", &pconfig->wtrInterval);
+				if (nArg!=1) {
+						printf("ERROR: No enough parameters or wrong format at line \"%s\"\r\n", oneline);
+						return EXIT_FAILURE;
+						}
+					i++;continue;
+					}
 			i++;
 		} // End while
 
@@ -188,6 +208,10 @@ void check_config(struct config *pconfig)
 	printf("   wtrscan.ampIR=%d, gainIR=%d, ampUV=%d, gainUV=%d, apdBV=%f\r\n",
 				pconfig->wtrscan.ampIR, pconfig->wtrscan.gainIR,
 				pconfig->wtrscan.ampUV, pconfig->wtrscan.gainUV, pconfig->wtrscan.apdBV);
+
+	printf("   refMeasurementInterval=%d seconds, wtrMeasurementInterval=%d seconds \r\n",
+					pconfig->refInterval, pconfig->wtrInterval);
+
 }
 
 /*Functions */

@@ -126,7 +126,7 @@ int procDaqData2(char* fname, double* muIR, double* muUV, double* stdIR, double*
     		   return EXIT_FAILURE;
     		 }
     	 else
-    		 { printf("    ERROR[%d]: UV Gaussian fitting failed. IRgfmu=%f, IRgfsig=%f\r\n", (int)UVgf[0], UVgf[0],UVgf[1]);
+    		 { printf("    ERROR[%d]: UV Gaussian fitting failed. UVgfmu=%f, UVgfsig=%f\r\n", (int)UVgf[0], UVgf[0],UVgf[1]);
     		   if (UVms[0]<0 || UVms[1]<0 || isnan(UVms[0]) ||isnan(UVms[1]))
 				   return EXIT_FAILURE;
 			   else
@@ -206,7 +206,7 @@ void testMatabCode()
 
  	// char *fnameIR="./data/testfiles/refir.txt";
      // char *fnameIR="./data/testfiles/refir_test4.txt";
-     char *fnameIR="./data/testfiles/wtrir_20130315_23h12m00s.txt";
+     char *fnameIR="./data/testfiles/wtrir_foam2000.txt";
 
 	 double muIR=-1, stdIR=-1;
 	 double muUV=-1, stdUV=-1;
